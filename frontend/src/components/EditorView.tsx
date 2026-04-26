@@ -251,13 +251,19 @@ export const EditorView: React.FC<EditorViewProps> = ({
               <button onClick={onFileCreate} className="flex-1 flex items-center justify-center gap-2 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95">
                 <Plus size={14} /> New Snippet
               </button>
-              <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center px-3 rounded-lg bg-[#CAA4F7]/20 hover:bg-[#CAA4F7]/30 text-[#CAA4F7] border border-[#CAA4F7]/30 transition-all active:scale-95 shadow-sm" title="Upload File">
+              <button 
+                onClick={() => fileInputRef.current?.click()} 
+                aria-label="Upload file"
+                className="flex items-center justify-center px-3 rounded-lg bg-[#CAA4F7]/20 hover:bg-[#CAA4F7]/30 text-[#CAA4F7] border border-[#CAA4F7]/30 transition-all active:scale-95 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50" 
+                title="Upload File">
                 <Upload size={14} />
               </button>
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
             </div>
-            <button onClick={onOpenGitHub}
-              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all border ${isDark ? 'bg-[#232340] hover:bg-[#2a2a50] text-slate-300 border-slate-700/50 hover:border-purple-500/50' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-300 hover:border-purple-400'} active:scale-[0.98] shadow-sm`}>
+            <button 
+              onClick={onOpenGitHub}
+              aria-label="Import repository from GitHub"
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all border focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${isDark ? 'bg-[#232340] hover:bg-[#2a2a50] text-slate-300 border-slate-700/50 hover:border-purple-500/50' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-300 hover:border-purple-400'} active:scale-[0.98] shadow-sm`}>
               <Github size={14} /> Import from GitHub
             </button>
           </div>
@@ -509,8 +515,10 @@ export const EditorView: React.FC<EditorViewProps> = ({
                 <span className="leading-snug opacity-80">{toast.message}</span>
               </div>
 
-              <button onClick={() => collab.dismissToast(toast.id)}
-                className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full hover:bg-white/10 transition-all active:scale-90 opacity-40 hover:opacity-100">
+              <button 
+                onClick={() => collab.dismissToast(toast.id)}
+                aria-label="Dismiss notification"
+                className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full hover:bg-white/10 transition-all active:scale-90 opacity-40 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-white/30">
                 <X size={12} />
               </button>
 

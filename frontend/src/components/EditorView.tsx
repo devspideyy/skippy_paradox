@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { ModernMonacoEditor } from './ModernMonacoEditor';
 import { CollabMonacoEditor } from './CollabMonacoEditor';
 import { FileExplorer } from './FileExplorer';
@@ -8,7 +9,7 @@ import { SharedFileInfo } from '../services/collabService';
 import { useTheme } from '../hooks/useTheme';
 import { detectLanguage, detectLanguageAI } from '../utils/detectLanguage';
 import {
-  FileCode, Plus, Upload, Code2, FolderOpen, Sun, Moon, Github, Users, X, MessageSquare, PanelRightClose, Menu
+  FileCode, Plus, Upload, Code2, FolderOpen, Sun, Moon, Github, Users, X, MessageSquare, PanelRightClose, Menu, GripVertical
 } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';
 import {
@@ -111,6 +112,24 @@ export const EditorView: React.FC<EditorViewProps> = ({
     const saved = localStorage.getItem('editor-font-size');
     return saved ? parseInt(saved, 10) : 16;
   });
+  // Persist panel sizes across sessions
+  const [sidebarSize, setSidebarSize] = useState(() => {
+    const s = localStorage.getItem('panel-sidebar-size');
+    return s ? parseFloat(s) : 18;
+  });
+  const [chatSize, setChatSize] = useState(() => {
+    const s = localStorage.getItem('panel-chat-size');
+    return s ? parseFloat(s) : 22;
+  });
+
+  const handleSidebarResize = useCallback((size: number) => {
+    setSidebarSize(size);
+    localStorage.setItem('panel-sidebar-size', String(size));
+  }, []);
+  const handleChatResize = useCallback((size: number) => {
+    setChatSize(size);
+    localStorage.setItem('panel-chat-size', String(size));
+  }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -432,26 +451,86 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
       {/* Collab toasts — always rendered so rejection/error toasts are visible */}
       {collab.toasts.length > 0 && (
-        <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+        <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2.5 pointer-events-none">
           {collab.toasts.map(toast => (
             <div
               key={toast.id}
-              className={`pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 min-w-[280px] max-w-[400px] rounded-md shadow-lg text-[12px] font-medium transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
-                toast.exiting ? 'opacity-0 translate-x-4 scale-100' : 'animate-[slideInRight_0.35s_cubic-bezier(0.2,0.8,0.2,1)_forwards] opacity-100 translate-x-0 scale-100'
-              } ${
-                toast.type === 'error' ? 'bg-[#bf616a] text-[#eceff4] border border-[#bf616a]/50' :
-                toast.type === 'success' ? 'bg-[#a3be8c] text-[#2e3440] border border-[#a3be8c]/50' :
-                toast.type === 'warning' ? 'bg-[#ebcb8b] text-[#2e3440] border border-[#ebcb8b]/50' :
-                isDark ? 'bg-[#3b4252] text-[#eceff4] border border-[#4c566a]' : 'bg-[#eceff4] text-[#2e3440] border border-[#d8dee9]'
-              }`}
+              className={`pointer-events-auto relative flex items-center gap-3 pl-4 pr-3 py-3 min-w-[260px] max-w-[380px] rounded-2xl shadow-2xl text-[12px] font-semibold overflow-hidden
+                ${toast.exiting ? 'animate-toast-out' : 'animate-toast-in'}
+                ${
+                  toast.type === 'error'   ? 'bg-[#3a1a1e]/90 text-[#ff8fa3] border border-[#ff4d6d]/25' :
+                  toast.type === 'success' ? 'bg-[#1a2e1e]/90 text-[#8fd9a8] border border-[#4ade80]/25' :
+                  toast.type === 'warning' ? 'bg-[#2e2510]/90 text-[#fcd34d] border border-[#fbbf24]/25' :
+                  isDark
+                    ? 'bg-[#1e1e2e]/90 text-[#cdd6f4] border border-[#45475a]/60'
+                    : 'bg-white/90 text-[#1e1e2e] border border-slate-200/80'
+                } backdrop-blur-xl`}
             >
-              <span className="flex-1 leading-snug">{toast.message}</span>
-              <button 
-                onClick={() => collab.dismissToast(toast.id)} 
-                className="shrink-0 ml-2 opacity-60 hover:opacity-100 transition-all p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
+              {/* Icon */}
+              <div className={`shrink-0 w-7 h-7 rounded-xl flex items-center justify-center text-[14px] ${
+                toast.destination === 'collab'  ? 'bg-purple-500/20' :
+                toast.destination === 'myfiles' ? 'bg-blue-500/20'   :
+                toast.type === 'error'          ? 'bg-red-500/20'     :
+                toast.type === 'success'        ? 'bg-green-500/20'   :
+                toast.type === 'warning'        ? 'bg-amber-500/20'   :
+                'bg-slate-500/20'
+              }`}>
+                {toast.destination === 'collab'  ? '⚡' :
+                 toast.destination === 'myfiles' ? '📁' :
+                 toast.type === 'error'          ? '✕'  :
+                 toast.type === 'success'        ? '✓'  :
+                 toast.type === 'warning'        ? '!'  : 'ℹ'}
+              </div>
+
+              {/* Text block */}
+              <div className="flex-1 min-w-0">
+                {/* File name — prominent */}
+                {toast.fileName && (
+                  <div className={`truncate font-bold text-[11px] mb-0.5 ${
+                    toast.destination === 'collab'  ? 'text-purple-300' :
+                    toast.destination === 'myfiles' ? 'text-blue-300'   :
+                    'opacity-90'
+                  }`}>
+                    {toast.fileName}
+                  </div>
+                )}
+                {/* Message + destination badge */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="leading-snug opacity-80">{toast.message}</span>
+                  {toast.destination && (
+                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold tracking-wide uppercase ${
+                      toast.destination === 'collab'
+                        ? 'bg-purple-500/25 text-purple-300 border border-purple-500/30'
+                        : 'bg-blue-500/25 text-blue-300 border border-blue-500/30'
+                    }`}>
+                      {toast.destination === 'collab' ? '⚡ Collab' : '📁 My Files'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Dismiss button */}
+              <button
+                onClick={() => collab.dismissToast(toast.id)}
+                className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full hover:bg-white/10 transition-all active:scale-90 opacity-40 hover:opacity-100"
               >
-                <X size={14} />
+                <X size={12} />
               </button>
+
+              {/* Progress drain bar */}
+              {!toast.exiting && (
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-2xl overflow-hidden">
+                  <div
+                    className={`h-full rounded-b-2xl origin-left ${
+                      toast.type === 'error'   ? 'bg-[#ff4d6d]/50' :
+                      toast.type === 'success' ? 'bg-[#4ade80]/50' :
+                      toast.type === 'warning' ? 'bg-[#fbbf24]/50' :
+                      'bg-[#CAA4F7]/50'
+                    }`}
+                    style={{ animation: 'toastDrain 4s linear forwards' }}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>

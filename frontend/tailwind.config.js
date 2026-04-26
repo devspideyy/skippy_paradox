@@ -22,6 +22,8 @@ export default {
         'fade-in': 'fadeIn 0.3s ease-out forwards',
         'fade-in-up': 'fadeInUp 0.3s ease-out forwards',
         'slide-in': 'slideIn 0.2s ease-out forwards',
+        'toast-in':  'toastIn  0.5s cubic-bezier(0.34,1.56,0.64,1) forwards',
+        'toast-out': 'toastOut 0.28s cubic-bezier(0.4,0,1,1) forwards',
       },
       keyframes: {
         fadeIn: {
@@ -39,6 +41,16 @@ export default {
         slideInRight: {
           from: { opacity: '0', transform: 'translateX(24px)' },
           to: { opacity: '1', transform: 'translateX(0)' },
+        },
+        toastIn: {
+          '0%':   { opacity: '0', transform: 'translateY(-16px) scale(0.92)', filter: 'blur(4px)' },
+          '60%':  { opacity: '1', transform: 'translateY(4px)  scale(1.02)', filter: 'blur(0px)' },
+          '80%':  { transform: 'translateY(-2px) scale(0.99)' },
+          '100%': { opacity: '1', transform: 'translateY(0)    scale(1)',    filter: 'blur(0px)' },
+        },
+        toastOut: {
+          '0%':   { opacity: '1', transform: 'translateY(0)    scale(1)',    filter: 'blur(0px)' },
+          '100%': { opacity: '0', transform: 'translateY(-12px) scale(0.94)', filter: 'blur(3px)' },
         },
       },
     },

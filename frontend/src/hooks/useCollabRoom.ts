@@ -12,6 +12,10 @@ export type CollabToast = {
   id: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
+  /** Optional file name to display prominently */
+  fileName?: string;
+  /** Destination badge shown on the toast */
+  destination?: 'collab' | 'myfiles';
   exiting?: boolean;
 };
 
@@ -50,6 +54,15 @@ export function useCollabRoom() {
 
   const providerRef = useRef<CollabProvider | null>(null);
 
+  // ── Cooldown tracking ────────────────────────────────────────────────
+  // Maps a dedup key → timestamp of last shown toast
+  const cooldownRef = useRef<Map<string, number>>(new Map());
+  // Pending debounce timers for spam batching (key → timer id)
+  const debounceRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const COOLDOWN_MS = 2000;  // same message won't re-fire within 2 s
+  const DEBOUNCE_MS = 600;   // rapid-fire events are batched within 600 ms
+
   // ── Toast helpers ────────────────────────────────────────────────────
 
   const dismissToast = useCallback((id: string) => {
@@ -65,16 +78,53 @@ export function useCollabRoom() {
     }, 300);
   }, []);
 
-  const addToast = useCallback((message: string, type: CollabToast['type'] = 'info') => {
-    const id = Date.now().toString() + Math.random().toString(36).substring(2);
+  const addToast = useCallback((
+    message: string,
+    type: CollabToast['type'] = 'info',
+    opts?: { fileName?: string; destination?: CollabToast['destination']; dedupKey?: string }
+  ) => {
+    const dedupKey = opts?.dedupKey ?? message;
+    const now = Date.now();
+    const last = cooldownRef.current.get(dedupKey) ?? 0;
+
+    // Still within cooldown window — suppress
+    if (now - last < COOLDOWN_MS) return;
+
+    cooldownRef.current.set(dedupKey, now);
+
+    const id = now.toString() + Math.random().toString(36).substring(2);
     setState(prev => ({
       ...prev,
-      toasts: [...prev.toasts.slice(-4), { id, message, type }],
+      toasts: [
+        ...prev.toasts.slice(-4),
+        { id, message, type, fileName: opts?.fileName, destination: opts?.destination },
+      ],
     }));
-    setTimeout(() => {
-      dismissToast(id);
-    }, 4000);
+    setTimeout(() => dismissToast(id), 4000);
   }, [dismissToast]);
+
+  /**
+   * Debounced toast — rapid calls within DEBOUNCE_MS are collapsed into one.
+   * The last call wins (most recent file name shown).
+   */
+  const addToastDebounced = useCallback((
+    message: string,
+    type: CollabToast['type'],
+    opts?: { fileName?: string; destination?: CollabToast['destination']; dedupKey?: string }
+  ) => {
+    const dedupKey = opts?.dedupKey ?? message;
+
+    // Clear any pending debounce for this key
+    const existing = debounceRef.current.get(dedupKey);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      debounceRef.current.delete(dedupKey);
+      addToast(message, type, opts);
+    }, DEBOUNCE_MS);
+
+    debounceRef.current.set(dedupKey, timer);
+  }, [addToast]);
 
   // ── Stable event handlers (use providerRef so they never go stale) ──
 
@@ -92,21 +142,20 @@ export function useCollabRoom() {
       setState(prev => ({ ...prev, members, pending }));
     },
     onJoinRequest: (req: PendingRequest) => {
-      addToast(`${req.displayName} wants to join`, 'info');
+      addToast(`${req.displayName} wants to join`, 'info', { dedupKey: `join-${req.displayName}` });
     },
     onPeerLeft: (_pid: string, name: string) => {
-      addToast(`${name} left the room`, 'warning');
+      addToast(`${name} left the room`, 'warning', { dedupKey: `left-${name}` });
     },
     onPromotedToHost: () => {
       setState(prev => ({ ...prev, isHost: true }));
-      addToast('You are now the host', 'success');
+      addToast('You are now the host', 'success', { dedupKey: 'promoted-host' });
     },
     onError: (msg: string) => {
       const prov = providerRef.current;
       const isRoomNotFound = msg.toLowerCase().includes('does not exist');
 
       if (prov && !prov.isHost && isRoomNotFound) {
-        // Room doesn't exist — surface as joinError in the modal
         setJoinError(msg);
         prov.destroy();
         providerRef.current = null;
@@ -123,8 +172,7 @@ export function useCollabRoom() {
         return;
       }
 
-      // Rejection or other errors — show toast and clean up
-      addToast(msg, 'error');
+      addToast(msg, 'error', { dedupKey: `error-${msg}` });
       if (prov && !prov.isHost) {
         prov.destroy();
         providerRef.current = null;
@@ -141,7 +189,7 @@ export function useCollabRoom() {
       }
     },
     onRoomClosed: () => {
-      addToast('Room was closed by the host', 'error');
+      addToast('Room was closed by the host', 'error', { dedupKey: 'room-closed' });
       providerRef.current = null;
       setState(prev => ({
         ...prev,
@@ -157,26 +205,32 @@ export function useCollabRoom() {
     onFileShared: (file: SharedFileInfo) => {
       setState(prev => {
         if (prev.sharedFiles.some(f => f.id === file.id)) return prev;
-        return {
-          ...prev,
-          sharedFiles: [...prev.sharedFiles, file],
-        };
+        return { ...prev, sharedFiles: [...prev.sharedFiles, file] };
       });
-      addToast(`"${file.name}" added to collab`, 'info');
+      addToastDebounced('Added to Collab', 'info', {
+        fileName: file.name,
+        destination: 'collab',
+        dedupKey: `share-${file.id}`,
+      });
     },
     onFileUnshared: (fileId: string) => {
-      setState(prev => ({
-        ...prev,
-        sharedFiles: prev.sharedFiles.filter(f => f.id !== fileId),
-      }));
-      addToast('File removed from collab', 'warning');
+      // Grab the file name before removing it from state
+      setState(prev => {
+        const file = prev.sharedFiles.find(f => f.id === fileId);
+        addToastDebounced('Moved to My Files', 'warning', {
+          fileName: file?.name,
+          destination: 'myfiles',
+          dedupKey: `unshare-${fileId}`,
+        });
+        return { ...prev, sharedFiles: prev.sharedFiles.filter(f => f.id !== fileId) };
+      });
     },
     onFilesReordered: (sharedFiles: SharedFileInfo[]) => {
       setState(prev => ({ ...prev, sharedFiles }));
     },
     onApproved: (sharedFiles: SharedFileInfo[]) => {
       setState(prev => ({ ...prev, sharedFiles }));
-      addToast('You joined the room!', 'success');
+      addToast('You joined the room!', 'success', { dedupKey: 'approved' });
     },
     onChatMessage: (message: ChatMessage) => {
       setState(prev => ({
@@ -189,7 +243,6 @@ export function useCollabRoom() {
   // ── Create room (user becomes host) ──────────────────────────────────
 
   const createRoom = useCallback((displayName: string, roomId: string) => {
-    // Destroy previous provider if any
     providerRef.current?.destroy();
 
     const color = getRandomColor();
@@ -296,6 +349,8 @@ export function useCollabRoom() {
   useEffect(() => {
     return () => {
       providerRef.current?.destroy();
+      // Clear any pending debounce timers
+      debounceRef.current.forEach(t => clearTimeout(t));
     };
   }, []);
 

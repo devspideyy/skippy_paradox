@@ -319,13 +319,19 @@ export const GitHubImportModal: React.FC<Props> = ({ isOpen, onClose, onImport, 
                     Sign in with GitHub to browse and import files from all your repositories — including private ones.
                   </p>
                 </div>
-                {authError && (
-                  <div className="flex items-start gap-2 text-red-400 text-xs bg-red-500/10 rounded-lg px-3 py-2">
-                    <AlertCircle size={14} className="mt-0.5 shrink-0" /><span>{authError}</span>
+                {/* Auth error toast — slides in above the button without growing the modal */}
+                <div
+                  className="overflow-hidden transition-all duration-300 ease-out"
+                  style={{ maxHeight: authError ? '60px' : '0px', opacity: authError ? 1 : 0 }}
+                >
+                  <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2.5 mb-1">
+                    <AlertCircle size={14} className="shrink-0 animate-[pulse_1.5s_ease-in-out_3]" />
+                    <span className="leading-snug">{authError}</span>
                   </div>
-                )}
+                </div>
                 <button onClick={handleConnect} disabled={authLoading}
-                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-[#24292f] to-[#1b1f23] hover:from-[#32383f] hover:to-[#24292f] text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-black/20 border border-white/10">
+                  key={authError ? `err-${authError}` : 'idle'}
+                  className={`w-full flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-[#24292f] to-[#1b1f23] hover:from-[#32383f] hover:to-[#24292f] text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-black/20 border border-white/10 ${authError ? 'animate-shake' : ''}`}>
                   {authLoading ? (
                     <><Loader2 size={18} className="animate-spin" /> Authenticating…</>
                   ) : (

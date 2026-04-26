@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, MessageSquare } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { ChatMessage } from '../services/collabService';
+import BorderGlow from './BorderGlow';
 
 interface ChatPanelProps {
   isOpen: boolean;
@@ -17,7 +18,7 @@ interface ChatPanelProps {
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
-  isOpen,
+  isOpen: _isOpen,
   messages,
   selfPeerId,
   onSendMessage,
@@ -55,25 +56,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     : 'bg-white text-slate-800 border border-slate-200/80';
 
   return (
-    <div 
-      className={`shrink-0 overflow-hidden fixed md:relative right-0 top-0 bottom-0 z-40 ${isOpen ? 'pointer-events-auto' : 'pointer-events-none md:pointer-events-auto'}`}
-      style={{
-        width: isOpen ? 'clamp(280px, 100vw, 300px)' : 0,
-        transition: 'width 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-        willChange: 'width',
-        contain: 'strict',
-      }}
+    <BorderGlow
+      backgroundColor={isDark ? '#1E1E2A' : '#F0F2F6'}
+      colors={['#CAA4F7', '#9B6DD7', '#38bdf8']}
+      borderRadius={0}
+      glowRadius={30}
+      glowIntensity={0.8}
+      glowColor="280 60 85"
+      fillOpacity={0.2}
+      className="h-full w-full"
     >
-      {/* Inner: GPU-composited slide via transform (runs on compositor thread) */}
-      <div 
-        className={`flex flex-col h-full w-[280px] sm:w-[300px] border-l ${borderColor} ${panelBg} shadow-2xl md:shadow-none`}
-        style={{
-          transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-          opacity: isOpen ? 1 : 0,
-          transition: 'transform 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 200ms ease',
-          willChange: 'transform, opacity',
-        }}
-      >
+      <div className={`flex flex-col h-full w-full ${panelBg}`}>
         {/* Header */}
         <div className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} shrink-0`}>
           <div className="flex items-center gap-2">
@@ -83,7 +76,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           {onClose && (
             <button 
               onClick={onClose}
-              className={`md:hidden p-1.5 rounded-md ${textMuted} hover:text-red-500 hover:bg-red-500/10 transition-colors`}
+              className={`p-1.5 rounded-md ${textMuted} hover:text-red-500 hover:bg-red-500/10 transition-colors`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
@@ -159,6 +152,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </form>
         </div>
       </div>
-    </div>
+    </BorderGlow>
   );
 };

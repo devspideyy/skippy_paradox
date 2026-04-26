@@ -10,6 +10,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../hooks/useTheme';
 import { useMountTransition } from '../hooks/useMountTransition';
 import { X, Users, Plus, LogIn, Copy, Check } from 'lucide-react';
+import BorderGlow from './BorderGlow';
 
 interface Props {
   isOpen: boolean;
@@ -78,10 +79,21 @@ export const CollabRoomModal: React.FC<Props> = ({ isOpen, onClose, onCreateRoom
       <div className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ease-out ${isActive ? 'opacity-100' : 'opacity-0'}`} />
 
       {/* Modal */}
-      <div
-        className={`relative w-full max-w-md mx-4 rounded-2xl ${bg} border ${border} shadow-2xl overflow-hidden transition-all duration-300 ease-out transform ${isActive ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}
-        onClick={e => e.stopPropagation()}
+      <BorderGlow
+        backgroundColor={isDark ? '#1a1a2e' : '#ffffff'}
+        colors={['#CAA4F7', '#9B6DD7', '#38bdf8']}
+        borderRadius={16}
+        glowRadius={50}
+        glowIntensity={1.2}
+        glowColor="280 60 85"
+        animated={isActive}
+        fillOpacity={0.3}
+        className={`w-full max-w-md mx-4 transition-all duration-300 ease-out transform ${isActive ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}
       >
+        <div
+          className={`${bg} rounded-2xl overflow-hidden`}
+          onClick={e => e.stopPropagation()}
+        >
         {/* Header */}
         <div className={`flex items-center justify-between px-6 py-4 border-b ${border}`}>
           <div className="flex items-center gap-2">
@@ -196,7 +208,8 @@ export const CollabRoomModal: React.FC<Props> = ({ isOpen, onClose, onCreateRoom
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </BorderGlow>
     </div>
   );
 };

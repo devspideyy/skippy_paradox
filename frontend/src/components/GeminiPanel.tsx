@@ -4,9 +4,11 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Sparkles, X, Loader2, Copy, Check, Trash2, ChevronDown } from 'lucide-react';
+import { Send, Sparkles, Loader2, Copy, Check, Trash2, ChevronDown } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { StoredFile } from '../services/storageService';
+import { geminiKeyRotation } from '../services/geminiKeyRotation';
+import BorderGlow from './BorderGlow';
 
 interface Message {
   id: string;
@@ -17,7 +19,6 @@ interface Message {
 
 interface GeminiPanelProps {
   activeFile: StoredFile | null;
-  files: StoredFile[];
 }
 
 const GEMINI_API_KEY_STORAGE = 'gemini-api-key';
@@ -114,15 +115,23 @@ function MessageBubble({ msg }: { msg: Message }) {
   );
 }
 
-export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) => {
+export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
   const { isDark } = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(GEMINI_API_KEY_STORAGE) || '');
-  const [showKeyInput, setShowKeyInput] = useState(!localStorage.getItem(GEMINI_API_KEY_STORAGE));
+  const [apiKey, setApiKey] = useState(() => {
+    // Check for user-provided key first, then fall back to rotation service
+    const userKey = localStorage.getItem(GEMINI_API_KEY_STORAGE);
+    if (userKey) return userKey;
+    return geminiKeyRotation.getCurrentKey() || '';
+  });
+  const [showKeyInput, setShowKeyInput] = useState(() => {
+    return !localStorage.getItem(GEMINI_API_KEY_STORAGE) && !geminiKeyRotation.hasKeys();
+  });
   const [keyDraft, setKeyDraft] = useState('');
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [keyStats, setKeyStats] = useState(geminiKeyRotation.getUsageStats());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -149,7 +158,14 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
   }, [activeFile]);
 
   const sendMessage = useCallback(async (userText: string) => {
-    if (!userText.trim() || isLoading || !apiKey) return;
+    if (!userText.trim() || isLoading) return;
+
+    // Get current API key (either user-provided or from rotation)
+    const currentKey = localStorage.getItem(GEMINI_API_KEY_STORAGE) || geminiKeyRotation.getCurrentKey();
+    if (!currentKey) {
+      setShowKeyInput(true);
+      return;
+    }
 
     const context = buildContext();
     const fullPrompt = context
@@ -174,7 +190,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
 
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${currentKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -193,6 +209,12 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
       const data = await res.json();
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'No response received.';
 
+      // Record successful usage for rotation tracking
+      if (!localStorage.getItem(GEMINI_API_KEY_STORAGE)) {
+        geminiKeyRotation.recordUsage();
+        setKeyStats(geminiKeyRotation.getUsageStats());
+      }
+
       setMessages(prev =>
         prev.map(m => m.id === loadingMsg.id ? { ...m, content: text, loading: false } : m)
       );
@@ -207,9 +229,9 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, apiKey, buildContext, activeFile]);
+  }, [isLoading, buildContext, activeFile]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     sendMessage(input);
   };
@@ -231,8 +253,11 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
 
   const handleClearKey = () => {
     localStorage.removeItem(GEMINI_API_KEY_STORAGE);
-    setApiKey('');
-    setShowKeyInput(true);
+    // Fall back to rotation service
+    const rotatedKey = geminiKeyRotation.getCurrentKey();
+    setApiKey(rotatedKey || '');
+    setShowKeyInput(!rotatedKey);
+    setKeyStats(geminiKeyRotation.getUsageStats());
   };
 
   const bg = isDark ? 'bg-[#13131f]' : 'bg-[#F0F2F6]';
@@ -241,7 +266,17 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
   const inputBg = isDark ? 'bg-[#1e1e2e] border-slate-600/50' : 'bg-white border-slate-300';
 
   return (
-    <div className={`flex flex-col h-full ${bg} border-l ${border}`}>
+    <BorderGlow
+      backgroundColor={isDark ? '#13131f' : '#F0F2F6'}
+      colors={['#38bdf8', '#9B6DD7', '#CAA4F7']}
+      borderRadius={0}
+      glowRadius={30}
+      glowIntensity={0.8}
+      glowColor="200 70 75"
+      fillOpacity={0.2}
+      className="h-full"
+    >
+      <div className={`flex flex-col h-full ${bg}`}>
       {/* Header */}
       <div className={`flex items-center justify-between px-3 py-2.5 border-b ${border} shrink-0`}>
         <div className="flex items-center gap-2">
@@ -281,38 +316,89 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
       {showKeyInput && (
         <div className={`px-3 py-3 border-b ${border} shrink-0 space-y-2`}>
           <p className={`text-[11px] ${textMuted}`}>
-            Enter your{' '}
-            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer"
-              className="text-purple-400 hover:underline">Gemini API key</a>
-            {' '}to enable AI assistance.
+            {geminiKeyRotation.hasKeys() ? (
+              <>Using {geminiKeyRotation.getKeyCount()} pre-configured API keys with automatic rotation.</>
+            ) : (
+              <>
+                Enter your{' '}
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer"
+                  className="text-purple-400 hover:underline">Gemini API key</a>
+                {' '}to enable AI assistance.
+              </>
+            )}
           </p>
-          <div className="flex gap-2">
-            <input
-              type="password"
-              value={keyDraft}
-              onChange={e => setKeyDraft(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSaveKey()}
-              placeholder="AIza..."
-              className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] border ${inputBg} focus:outline-none focus:ring-1 focus:ring-purple-500/50 ${isDark ? 'text-white' : 'text-slate-900'} placeholder:text-slate-500`}
-            />
-            <button
-              onClick={handleSaveKey}
-              disabled={!keyDraft.trim()}
-              className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold transition-colors disabled:opacity-40"
-            >
-              Save
-            </button>
-          </div>
+          {!geminiKeyRotation.hasKeys() && (
+            <>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={keyDraft}
+                  onChange={e => setKeyDraft(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSaveKey()}
+                  placeholder="AIza..."
+                  className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] border ${inputBg} focus:outline-none focus:ring-1 focus:ring-purple-500/50 ${isDark ? 'text-white' : 'text-slate-900'} placeholder:text-slate-500`}
+                />
+                <button
+                  onClick={handleSaveKey}
+                  disabled={!keyDraft.trim()}
+                  className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold transition-colors disabled:opacity-40"
+                >
+                  Save
+                </button>
+              </div>
+            </>
+          )}
           {apiKey && (
             <button onClick={handleClearKey} className="text-[10px] text-red-400 hover:underline">
-              Remove saved key
+              {localStorage.getItem(GEMINI_API_KEY_STORAGE) ? 'Remove saved key' : 'Reset rotation'}
             </button>
           )}
         </div>
       )}
 
+      {/* Key rotation stats */}
+      {!showKeyInput && !localStorage.getItem(GEMINI_API_KEY_STORAGE) && geminiKeyRotation.hasKeys() && (
+        <div className={`px-3 py-2 border-b ${border} shrink-0`}>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className={`text-[10px] font-semibold uppercase tracking-wider ${textMuted}`}>
+              API Key Rotation
+            </p>
+            <button
+              onClick={() => {
+                geminiKeyRotation.resetUsage();
+                setKeyStats(geminiKeyRotation.getUsageStats());
+              }}
+              className={`text-[9px] px-1.5 py-0.5 rounded ${isDark ? 'bg-slate-700/60 hover:bg-slate-700' : 'bg-slate-200 hover:bg-slate-300'} ${textMuted} transition-colors`}
+            >
+              Reset
+            </button>
+          </div>
+          <div className="flex gap-1">
+            {keyStats.map(stat => (
+              <div
+                key={stat.keyIndex}
+                className={`flex-1 px-1.5 py-1 rounded text-center ${
+                  stat.isCurrent
+                    ? 'bg-purple-500/20 border border-purple-500/40'
+                    : isDark
+                      ? 'bg-slate-700/40'
+                      : 'bg-slate-200'
+                }`}
+              >
+                <div className={`text-[9px] font-bold ${stat.isCurrent ? 'text-purple-400' : textMuted}`}>
+                  Key {stat.keyIndex}
+                </div>
+                <div className={`text-[8px] ${textMuted}`}>
+                  {stat.usage}/50
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Quick actions */}
-      {!showKeyInput && apiKey && messages.length === 0 && (
+      {!showKeyInput && (apiKey || geminiKeyRotation.hasKeys()) && messages.length === 0 && (
         <div className={`px-3 py-3 border-b ${border} shrink-0`}>
           <p className={`text-[10px] font-semibold uppercase tracking-wider ${textMuted} mb-2`}>Quick actions</p>
           <div className="flex flex-wrap gap-1.5">
@@ -343,7 +429,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-3 py-3 custom-scrollbar relative"
       >
-        {messages.length === 0 && !showKeyInput && apiKey && (
+        {messages.length === 0 && !showKeyInput && (apiKey || geminiKeyRotation.hasKeys()) && (
           <div className={`flex flex-col items-center justify-center h-full py-8 ${textMuted} text-center`}>
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center mb-3">
               <Sparkles size={22} className="text-purple-400" />
@@ -371,7 +457,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
       )}
 
       {/* Input */}
-      {!showKeyInput && apiKey && (
+      {!showKeyInput && (apiKey || geminiKeyRotation.hasKeys()) && (
         <div className={`px-3 py-2.5 border-t ${border} shrink-0`}>
           <form onSubmit={handleSubmit} className="relative">
             <textarea
@@ -406,6 +492,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, files }) =
           </p>
         </div>
       )}
-    </div>
+      </div>
+    </BorderGlow>
   );
 };

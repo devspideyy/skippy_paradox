@@ -80,6 +80,9 @@ export interface CollabEvents {
   onFilesReordered: (sharedFiles: SharedFileInfo[]) => void;
   onApproved: (sharedFiles: SharedFileInfo[]) => void;
   onChatMessage: (message: ChatMessage) => void;
+  onVoiceOffer: (fromPeerId: string, sdp: RTCSessionDescriptionInit) => void;
+  onVoiceAnswer: (fromPeerId: string, sdp: RTCSessionDescriptionInit) => void;
+  onIceCandidate: (fromPeerId: string, candidate: RTCIceCandidateInit) => void;
 }
 
 // ─── Predefined cursor colors ──────────────────────────────────────────
@@ -381,6 +384,21 @@ export class CollabProvider {
     this._sendJson({ type: 'voice-speaking', speaking });
   }
 
+  /** Send WebRTC offer to a specific peer */
+  sendVoiceOffer(targetPeerId: string, sdp: RTCSessionDescriptionInit) {
+    this._sendJson({ type: 'voice-offer', targetPeerId, sdp });
+  }
+
+  /** Send WebRTC answer to a specific peer */
+  sendVoiceAnswer(targetPeerId: string, sdp: RTCSessionDescriptionInit) {
+    this._sendJson({ type: 'voice-answer', targetPeerId, sdp });
+  }
+
+  /** Send ICE candidate to a specific peer */
+  sendIceCandidate(targetPeerId: string, candidate: RTCIceCandidateInit) {
+    this._sendJson({ type: 'voice-ice-candidate', targetPeerId, candidate });
+  }
+
   // ── Doc connection management ────────────────────────────────────────
 
   /** Open a Yjs sync connection for a specific shared file */
@@ -500,6 +518,18 @@ export class CollabProvider {
           text: msg.text,
           timestamp: msg.timestamp,
         });
+        break;
+
+      case 'voice-offer':
+        this.events.onVoiceOffer(msg.fromPeerId, msg.sdp);
+        break;
+
+      case 'voice-answer':
+        this.events.onVoiceAnswer(msg.fromPeerId, msg.sdp);
+        break;
+
+      case 'voice-ice-candidate':
+        this.events.onIceCandidate(msg.fromPeerId, msg.candidate);
         break;
 
       case 'error':

@@ -6,15 +6,17 @@ import { FileExplorer } from './FileExplorer';
 import { CollabBar } from './CollabBar';
 import { ChatPanel } from './ChatPanel';
 import { GeminiPanel } from './GeminiPanel';
+import VoiceLobbyPanel from './VoiceLobbyPanel';
 import { CodeRunner } from './CodeRunner';
 import DotField from './DotField';
 import { StoredFile } from '../services/storageService';
 import { SharedFileInfo } from '../services/collabService';
+import { VoiceManager } from '../services/voiceManager';
 import { useTheme } from '../hooks/useTheme';
 import { detectLanguage, detectLanguageAI } from '../utils/detectLanguage';
 import {
   FileCode, Plus, Upload, Code2, FolderOpen, Sun, Moon,
-  Github, Users, X, MessageSquare, PanelRightClose, Menu, Sparkles,
+  Github, Users, X, MessageSquare, PanelRightClose, Menu, Sparkles, Headphones,
 } from 'lucide-react';
 import {
   JavaScript, TypeScript, Python, CPlusPlus, C, Java, Go, RustDark, Ruby, PHP,
@@ -71,6 +73,7 @@ interface CollabHook {
   unshareFile: (fileId: string) => void;
   dismissToast: (id: string) => void;
   sendChatMessage: (text: string) => void;
+  voiceManager: VoiceManager;
 }
 
 interface EditorViewProps {
@@ -107,6 +110,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isGeminiOpen, setIsGeminiOpen] = useState(false);
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [cursorPosition, setCursorPosition] = useState({ ln: 1, col: 1 });
@@ -152,6 +156,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
       setUnreadChatCount(0);
       lastChatCountRef.current = 0;
       setIsChatOpen(false);
+      setIsVoiceOpen(false);
     }
   }, [collab.roomId]);
 
@@ -231,26 +236,41 @@ export const EditorView: React.FC<EditorViewProps> = ({
             <Sparkles size={17} />
           </button>
 
-          {/* Chat toggle (collab only) */}
+          {/* Voice + Chat toggle (collab only) */}
           {isInRoom && (
-            <button
-              onClick={() => setIsChatOpen(prev => !prev)}
-              aria-label={isChatOpen ? 'Close chat panel' : 'Open chat panel'}
-              aria-expanded={isChatOpen}
-              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
-                isChatOpen
-                  ? isDark ? 'bg-[#CAA4F7]/20 text-[#CAA4F7]' : 'bg-[#CAA4F7]/15 text-[#9B6DD7]'
-                  : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-[#CAA4F7]' : 'text-slate-500 hover:bg-slate-200 hover:text-[#9B6DD7]'
-              }`}
-              title={isChatOpen ? 'Close Chat' : 'Open Chat'}
-            >
-              {!isChatOpen && unreadChatCount > 0 && (
-                <span className="absolute -mt-5 ml-5 min-w-[16px] h-4 px-1 rounded-full bg-pink-500 text-white text-[9px] leading-4 font-bold">
-                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
-                </span>
-              )}
-              {isChatOpen ? <PanelRightClose size={18} /> : <MessageSquare size={18} />}
-            </button>
+            <>
+              <button
+                onClick={() => setIsVoiceOpen(prev => !prev)}
+                aria-label={isVoiceOpen ? 'Close voice panel' : 'Open voice panel'}
+                aria-expanded={isVoiceOpen}
+                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
+                  isVoiceOpen
+                    ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-500/15 text-emerald-600'
+                    : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-emerald-400' : 'text-slate-500 hover:bg-slate-200 hover:text-emerald-600'
+                }`}
+                title={isVoiceOpen ? 'Close Voice' : 'Open Voice'}
+              >
+                <Headphones size={17} />
+              </button>
+              <button
+                onClick={() => setIsChatOpen(prev => !prev)}
+                aria-label={isChatOpen ? 'Close chat panel' : 'Open chat panel'}
+                aria-expanded={isChatOpen}
+                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
+                  isChatOpen
+                    ? isDark ? 'bg-[#CAA4F7]/20 text-[#CAA4F7]' : 'bg-[#CAA4F7]/15 text-[#9B6DD7]'
+                    : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-[#CAA4F7]' : 'text-slate-500 hover:bg-slate-200 hover:text-[#9B6DD7]'
+                }`}
+                title={isChatOpen ? 'Close Chat' : 'Open Chat'}
+              >
+                {!isChatOpen && unreadChatCount > 0 && (
+                  <span className="absolute -mt-5 ml-5 min-w-[16px] h-4 px-1 rounded-full bg-pink-500 text-white text-[9px] leading-4 font-bold">
+                    {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                  </span>
+                )}
+                {isChatOpen ? <PanelRightClose size={18} /> : <MessageSquare size={18} />}
+              </button>
+            </>
           )}
 
           {!isInRoom && (
@@ -376,9 +396,9 @@ export const EditorView: React.FC<EditorViewProps> = ({
                 </div>
               </div>
             ) : (
-              <Group direction="vertical" className="flex-1 relative overflow-hidden h-full">
+              <Group orientation="horizontal" className="flex-1 relative overflow-hidden h-full">
                 {/* Editor Panel */}
-                <Panel defaultSize="70%" minSize="40%" className="relative overflow-hidden">
+                <Panel defaultSize="70%" minSize="35%" className="relative overflow-hidden">
                   {collab.status === 'waiting-approval' && (
                     <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center ${isDark ? 'bg-[#1e1e2e]/90' : 'bg-[#eff1f5]/90'} backdrop-blur-sm`}>
                       <Users size={32} className="text-[#CAA4F7] mb-4" />
@@ -400,19 +420,19 @@ export const EditorView: React.FC<EditorViewProps> = ({
                   )}
                 </Panel>
 
-                {/* Horizontal Resize Handle */}
+                {/* Vertical Resize Handle */}
                 <Separator
-                  className={`group relative flex items-center justify-center h-[5px] cursor-row-resize select-none transition-all duration-150 ease-out
+                  className={`group relative flex items-center justify-center w-[5px] cursor-col-resize select-none transition-all duration-150 ease-out
                     ${isDark ? 'bg-slate-800/60 hover:bg-emerald-500/40' : 'bg-slate-300/60 hover:bg-emerald-400/40'}`}
                 >
-                  <div className={`h-[3px] w-8 rounded-full transition-all duration-200 ease-out
+                  <div className={`w-[3px] h-8 rounded-full transition-all duration-200 ease-out
                     ${isDark ? 'bg-slate-600 group-hover:bg-emerald-400 group-active:bg-emerald-300' : 'bg-slate-400 group-hover:bg-emerald-500 group-active:bg-emerald-600'}
-                    group-hover:w-12 group-active:w-16`}
+                    group-hover:h-12 group-active:h-16`}
                   />
                 </Separator>
 
                 {/* Code Runner Panel */}
-                <Panel defaultSize="30%" minSize="20%" maxSize="60%" className="overflow-hidden">
+                <Panel defaultSize="30%" minSize="15%" maxSize="60%" className="overflow-hidden">
                   <CodeRunner
                     code={activeFile.content}
                     language={activeFile.language}
@@ -440,6 +460,24 @@ export const EditorView: React.FC<EditorViewProps> = ({
               <Panel defaultSize="22%" minSize="16%" maxSize="40%" className="flex flex-col min-w-0">
                 <ChatPanel isOpen={true} messages={collab.chatMessages} selfPeerId={collab.peerId}
                   onSendMessage={collab.sendChatMessage} canSend={collab.status === 'connected'} onClose={() => setIsChatOpen(false)} />
+              </Panel>
+            </>
+          )}
+
+          {/* Voice panel (collab only) */}
+          {isInRoom && isVoiceOpen && (
+            <>
+              <ResizeHandle isDark={isDark} />
+              <Panel defaultSize="20%" minSize="14%" maxSize="35%" className="flex flex-col min-w-0">
+                <VoiceLobbyPanel
+                  isOpen={true}
+                  members={collab.members}
+                  selfPeerId={collab.peerId}
+                  provider={collab.provider}
+                  canUseVoice={collab.status === 'connected'}
+                  onClose={() => setIsVoiceOpen(false)}
+                  voiceManager={collab.voiceManager}
+                />
               </Panel>
             </>
           )}

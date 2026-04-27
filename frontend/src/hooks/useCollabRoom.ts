@@ -7,6 +7,7 @@ import {
   CollabProvider, CollabMember, PendingRequest, CollabStatus,
   SharedFileInfo, CollabEvents, getRandomColor, ChatMessage,
 } from '../services/collabService';
+import { VoiceManager } from '../services/voiceManager';
 import { soundEffects } from '../utils/soundEffects';
 
 export type CollabToast = {
@@ -54,6 +55,7 @@ export function useCollabRoom() {
   const [joinError, setJoinError] = useState<string | null>(null);
 
   const providerRef = useRef<CollabProvider | null>(null);
+  const voiceManagerRef = useRef<VoiceManager>(new VoiceManager());
 
   // ── Cooldown tracking ────────────────────────────────────────────────
   // Maps a dedup key → timestamp of last shown toast
@@ -254,6 +256,15 @@ export function useCollabRoom() {
         };
       });
     },
+    onVoiceOffer: (fromPeerId: string, sdp: RTCSessionDescriptionInit) => {
+      voiceManagerRef.current.handleOffer(fromPeerId, sdp);
+    },
+    onVoiceAnswer: (fromPeerId: string, sdp: RTCSessionDescriptionInit) => {
+      voiceManagerRef.current.handleAnswer(fromPeerId, sdp);
+    },
+    onIceCandidate: (fromPeerId: string, candidate: RTCIceCandidateInit) => {
+      voiceManagerRef.current.handleIceCandidate(fromPeerId, candidate);
+    },
   };
 
   // ── Create room (user becomes host) ──────────────────────────────────
@@ -282,6 +293,7 @@ export function useCollabRoom() {
 
     provider.connect();
     provider.createRoom();
+    voiceManagerRef.current.setProvider(provider);
   }, []);
 
   // ── Join room ────────────────────────────────────────────────────────
@@ -311,11 +323,14 @@ export function useCollabRoom() {
 
     provider.connect();
     provider.joinRoom();
+    voiceManagerRef.current.setProvider(provider);
   }, []);
 
   // ── Leave room ───────────────────────────────────────────────────────
 
   const leaveRoom = useCallback(() => {
+    voiceManagerRef.current.destroy();
+    voiceManagerRef.current = new VoiceManager();
     if (providerRef.current) {
       providerRef.current.destroy();
       providerRef.current = null;
@@ -364,8 +379,8 @@ export function useCollabRoom() {
 
   useEffect(() => {
     return () => {
+      voiceManagerRef.current.destroy();
       providerRef.current?.destroy();
-      // Clear any pending debounce timers
       debounceRef.current.forEach(t => clearTimeout(t));
     };
   }, []);
@@ -384,5 +399,6 @@ export function useCollabRoom() {
     reorderFiles,
     dismissToast,
     sendChatMessage,
+    voiceManager: voiceManagerRef.current,
   };
 }

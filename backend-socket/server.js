@@ -428,6 +428,36 @@ function handleControlConnection(ws, roomId) {
         break;
       }
 
+      // ── WebRTC signaling: relay offer to target peer ───────
+      case 'voice-offer': {
+        if (!room || !room.members.has(peerId)) return;
+        const target = room.members.get(msg.targetPeerId);
+        if (target && target.ws.readyState === WebSocket.OPEN) {
+          sendJson(target.ws, { type: 'voice-offer', fromPeerId: peerId, sdp: msg.sdp });
+        }
+        break;
+      }
+
+      // ── WebRTC signaling: relay answer to target peer ──────
+      case 'voice-answer': {
+        if (!room || !room.members.has(peerId)) return;
+        const target = room.members.get(msg.targetPeerId);
+        if (target && target.ws.readyState === WebSocket.OPEN) {
+          sendJson(target.ws, { type: 'voice-answer', fromPeerId: peerId, sdp: msg.sdp });
+        }
+        break;
+      }
+
+      // ── WebRTC signaling: relay ICE candidate ──────────────
+      case 'voice-ice-candidate': {
+        if (!room || !room.members.has(peerId)) return;
+        const target = room.members.get(msg.targetPeerId);
+        if (target && target.ws.readyState === WebSocket.OPEN) {
+          sendJson(target.ws, { type: 'voice-ice-candidate', fromPeerId: peerId, candidate: msg.candidate });
+        }
+        break;
+      }
+
       // ── Leave ───────────────────────────────────────────────
       case 'leave': {
         handleDisconnect(ws, peerId, room);

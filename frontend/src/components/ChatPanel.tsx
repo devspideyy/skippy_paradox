@@ -69,16 +69,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     >
       <div className={`flex flex-col h-full w-full ${panelBg} relative overflow-hidden`}>
         {/* DotField Background */}
-        <div className="absolute inset-0 z-0 opacity-50">
+        <div className="absolute inset-0 z-0 opacity-70">
           <DotField
-            dotRadius={1.5}
-            dotSpacing={18}
-            bulgeStrength={60}
-            glowRadius={150}
+            dotRadius={2}
+            dotSpacing={16}
+            bulgeStrength={70}
+            glowRadius={160}
             sparkle={true}
             waveAmplitude={0}
-            gradientFrom={isDark ? 'rgba(202, 164, 247, 0.25)' : 'rgba(136, 57, 239, 0.20)'}
-            gradientTo={isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(168, 85, 247, 0.15)'}
+            gradientFrom={isDark ? 'rgba(202, 164, 247, 0.40)' : 'rgba(136, 57, 239, 0.30)'}
+            gradientTo={isDark ? 'rgba(139, 92, 246, 0.25)' : 'rgba(168, 85, 247, 0.20)'}
             glowColor={isDark ? '#1E1E2A' : '#F0F2F6'}
           />
         </div>
@@ -99,49 +99,50 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-hidden p-3 space-y-3 relative z-10">
-          <div className="h-full overflow-y-auto custom-scrollbar">
+        <div className="flex-1 overflow-hidden relative z-10">
+          <div className="h-full overflow-y-auto scrollbar-hide p-3 space-y-3">
             {messages.length === 0 && (
-            <div className={`flex flex-col items-center justify-center h-full py-8 ${textMuted}`}>
-              <MessageSquare size={24} className="mb-2 opacity-40" />
-              <p className="text-xs">No messages yet</p>
-              <p className="text-[10px] mt-1 opacity-50">Say hello to your collaborators!</p>
-            </div>
+              <div className={`flex flex-col items-center justify-center h-full py-8 ${textMuted}`}>
+                <MessageSquare size={24} className="mb-2 opacity-40" />
+                <p className="text-xs">No messages yet</p>
+                <p className="text-[10px] mt-1 opacity-50">Say hello to your collaborators!</p>
+              </div>
             )}
             {messages.map((msg) => {
-            const isSelf = msg.peerId === selfPeerId;
-            return (
-              <div key={msg.id} className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
-                <div className="flex items-center gap-1.5 mb-1 mx-1">
-                  {!isSelf && (
-                    <div
-                      className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0"
-                      style={{ backgroundColor: msg.color }}
-                    >
-                      {msg.displayName.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <span className={`text-[10px] font-semibold ${isSelf ? 'text-[#CAA4F7]' : textMuted}`}>
-                    {isSelf ? 'You' : msg.displayName}
-                  </span>
-                  <span className={`text-[9px] ${textMuted} opacity-50`}>
-                    {formatTime(msg.timestamp)}
-                  </span>
-                </div>
+              const isSelf = msg.peerId === selfPeerId;
+              return (
+                <div key={msg.id} className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
+                  <div className="flex items-center gap-1.5 mb-1 mx-1">
+                    {!isSelf && (
+                      <div
+                        className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0"
+                        style={{ backgroundColor: msg.color }}
+                      >
+                        {msg.displayName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className={`text-[10px] font-semibold ${isSelf ? 'text-[#CAA4F7]' : textMuted}`}>
+                      {isSelf ? 'You' : msg.displayName}
+                    </span>
+                    <span className={`text-[9px] ${textMuted} opacity-50`}>
+                      {formatTime(msg.timestamp)}
+                    </span>
+                  </div>
 
-                <div
-                  className={`px-3 py-2 rounded-lg text-[12px] max-w-[85%] leading-relaxed ${
-                    isSelf
-                      ? `${selfBubble} rounded-tr-sm`
-                      : `${otherBubble} rounded-tl-sm`
-                  }`}
-                >
-                  {msg.text}
+                  <div
+                    className={`px-3 py-2 rounded-lg text-[12px] max-w-[85%] leading-relaxed ${
+                      isSelf
+                        ? `${selfBubble} rounded-tr-sm`
+                        : `${otherBubble} rounded-tl-sm`
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-          <div ref={messagesEndRef} />
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
         </div>
 
         {/* Input Area */}

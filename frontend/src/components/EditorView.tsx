@@ -7,8 +7,8 @@ import { CollabBar } from './CollabBar';
 import { ChatPanel } from './ChatPanel';
 import { GeminiPanel } from './GeminiPanel';
 import { CodeRunner } from './CodeRunner';
-import { Tooltip } from './Tooltip';
 import DotField from './DotField';
+import Dock, { DockItemData } from './Dock';
 import { StoredFile } from '../services/storageService';
 import { SharedFileInfo } from '../services/collabService';
 import { useTheme } from '../hooks/useTheme';
@@ -164,6 +164,56 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const textPrimary = isDark ? 'text-white' : 'text-slate-900';
   const borderColor = isDark ? 'border-slate-800/50' : 'border-slate-300/50';
 
+  // Dock items configuration
+  const dockItems: DockItemData[] = [
+    {
+      icon: <Plus size={20} />,
+      label: 'New File',
+      onClick: onFileCreate,
+      className: 'hover:bg-purple-500/20'
+    },
+    {
+      icon: <Upload size={20} />,
+      label: 'Upload',
+      onClick: () => fileInputRef.current?.click(),
+      className: 'hover:bg-blue-500/20'
+    },
+    {
+      icon: <Github size={20} />,
+      label: 'GitHub',
+      onClick: onOpenGitHub,
+      className: 'hover:bg-slate-500/20'
+    },
+    {
+      icon: <Users size={20} />,
+      label: 'Collab',
+      onClick: onOpenCollab,
+      className: 'hover:bg-pink-500/20'
+    },
+    {
+      icon: <Code2 size={20} />,
+      label: 'Run Code',
+      onClick: () => {
+        // Focus on code runner panel
+        const runButton = document.querySelector('[aria-label="Run code"]') as HTMLButtonElement;
+        if (runButton) runButton.click();
+      },
+      className: 'hover:bg-green-500/20'
+    },
+    {
+      icon: <Sparkles size={20} />,
+      label: 'AI Assistant',
+      onClick: () => setIsGeminiOpen(prev => !prev),
+      className: 'hover:bg-blue-400/20'
+    },
+    {
+      icon: isDark ? <Sun size={20} /> : <Moon size={20} />,
+      label: isDark ? 'Light Mode' : 'Dark Mode',
+      onClick: toggleTheme,
+      className: 'hover:bg-amber-500/20'
+    }
+  ];
+
   return (
     <div className={`flex flex-col h-screen ${bg} text-slate-300 overflow-hidden`}>
 
@@ -194,14 +244,14 @@ export const EditorView: React.FC<EditorViewProps> = ({
           {/* Gemini toggle */}
           <button
             onClick={() => setIsGeminiOpen(prev => !prev)}
-            aria-label={isGeminiOpen ? 'Close Gemini AI panel' : 'Open Gemini AI panel'}
+            aria-label={isGeminiOpen ? 'Close AI Assistant panel' : 'Open AI Assistant panel'}
             aria-expanded={isGeminiOpen}
             className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
               isGeminiOpen
                 ? isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/15 text-blue-600'
                 : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-blue-400' : 'text-slate-500 hover:bg-slate-200 hover:text-blue-600'
             }`}
-            title={isGeminiOpen ? 'Close Gemini AI' : 'Open Gemini AI'}
+            title={isGeminiOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
           >
             <Sparkles size={17} />
           </button>
@@ -583,6 +633,19 @@ export const EditorView: React.FC<EditorViewProps> = ({
           ))}
         </div>
       )}
+
+      {/* ── Dock ────────────────────────────────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
+        <div className="pointer-events-auto">
+          <Dock 
+            items={dockItems}
+            magnification={70}
+            distance={150}
+            panelHeight={68}
+            baseItemSize={50}
+          />
+        </div>
+      </div>
     </div>
   );
 };

@@ -90,7 +90,7 @@ function MessageBubble({ msg }: { msg: Message }) {
           <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
             <Sparkles size={8} className="text-white" />
           </div>
-          <span className={`text-[10px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Gemini</span>
+          <span className={`text-[10px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>AI</span>
         </div>
       )}
       <div className={`px-3 py-2 rounded-lg text-[12px] max-w-[92%] leading-relaxed ${
@@ -166,7 +166,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
 
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${currentKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${currentKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -237,42 +237,51 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
     >
       <div className={`flex flex-col h-full w-full ${panelBg} relative overflow-hidden`}>
         {/* DotField Background */}
-        <div className="absolute inset-0 z-0 opacity-50">
+        <div className="absolute inset-0 z-0 opacity-70">
           <DotField
-            dotRadius={1.5}
-            dotSpacing={18}
-            bulgeStrength={60}
-            glowRadius={150}
+            dotRadius={2}
+            dotSpacing={16}
+            bulgeStrength={70}
+            glowRadius={160}
             sparkle={true}
             waveAmplitude={0}
-            gradientFrom={isDark ? 'rgba(202, 164, 247, 0.25)' : 'rgba(136, 57, 239, 0.20)'}
-            gradientTo={isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(168, 85, 247, 0.15)'}
+            gradientFrom={isDark ? 'rgba(202, 164, 247, 0.40)' : 'rgba(136, 57, 239, 0.30)'}
+            gradientTo={isDark ? 'rgba(139, 92, 246, 0.25)' : 'rgba(168, 85, 247, 0.20)'}
             glowColor={isDark ? '#1E1E2A' : '#F0F2F6'}
           />
         </div>
         {/* Header */}
-        <div className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} shrink-0 relative z-10`}>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <Sparkles size={8} className="text-white" />
+        <div className={`flex flex-col px-4 py-3 border-b ${borderColor} shrink-0 relative z-10`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <Sparkles size={8} className="text-white" />
+              </div>
+              <h2 className={`text-xs font-bold uppercase tracking-wider ${textMuted}`}>AI Assistant</h2>
+              {activeFile && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-slate-700/60 text-slate-400' : 'bg-slate-200 text-slate-500'} truncate max-w-[100px]`}>
+                  {activeFile.name}
+                </span>
+              )}
             </div>
-            <h2 className={`text-xs font-bold uppercase tracking-wider ${textMuted}`}>Gemini AI</h2>
-            {activeFile && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-slate-700/60 text-slate-400' : 'bg-slate-200 text-slate-500'} truncate max-w-[100px]`}>
-                {activeFile.name}
-              </span>
-            )}
+            <div className="flex items-center gap-1">
+              {messages.length > 0 && (
+                <button
+                  onClick={() => setMessages([])}
+                  className={`p-1.5 rounded-md ${textMuted} hover:text-red-500 hover:bg-red-500/10 transition-colors`}
+                  title="Clear chat"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            {messages.length > 0 && (
-              <button
-                onClick={() => setMessages([])}
-                className={`p-1.5 rounded-md ${textMuted} hover:text-red-500 hover:bg-red-500/10 transition-colors`}
-                title="Clear chat"
-              >
-                <Trash2 size={13} />
-              </button>
-            )}
+          {/* Model Indicator */}
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <div className={`flex items-center gap-1 text-[9px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+              <span className="font-mono">gemini-1.5-flash</span>
+            </div>
           </div>
         </div>
 
@@ -336,20 +345,22 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
         )}
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar relative z-10">
-          {messages.length === 0 && (
-            <div className={`flex flex-col items-center justify-center h-full py-8 ${textMuted}`}>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center mb-2">
-                <Sparkles size={18} className="text-purple-400" />
+        <div className="flex-1 overflow-hidden relative z-10">
+          <div className="h-full overflow-y-auto scrollbar-hide p-3 space-y-3">
+            {messages.length === 0 && (
+              <div className={`flex flex-col items-center justify-center h-full py-8 ${textMuted}`}>
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center mb-2">
+                  <Sparkles size={18} className="text-purple-400" />
+                </div>
+                <p className="text-xs font-semibold">Ask AI anything</p>
+                <p className="text-[10px] mt-1 opacity-50">Analyze, fix, or improve your code</p>
               </div>
-              <p className="text-xs font-semibold">Ask Gemini anything</p>
-              <p className="text-[10px] mt-1 opacity-50">Analyze, fix, or improve your code</p>
-            </div>
-          )}
-          {messages.map(msg => (
-            <MessageBubble key={msg.id} msg={msg} />
-          ))}
-          <div ref={messagesEndRef} />
+            )}
+            {messages.map(msg => (
+              <MessageBubble key={msg.id} msg={msg} />
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
         </div>
 
         {/* Input Area */}
@@ -360,7 +371,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={activeFile ? `Ask about ${activeFile.name}...` : 'Ask Gemini...'}
+              placeholder={activeFile ? `Ask about ${activeFile.name}...` : 'Ask AI...'}
               className={`w-full pl-3 pr-10 py-2 rounded-lg text-[12px] focus:outline-none transition-colors border ${inputBg} ${textPrimary} placeholder:text-slate-400/60 focus:ring-1 focus:ring-[#CAA4F7]/50 focus:border-[#CAA4F7]/50`}
             />
             <button

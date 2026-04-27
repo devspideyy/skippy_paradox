@@ -13,6 +13,7 @@ import {
 import { useMountTransition } from '../hooks/useMountTransition';
 import { detectLanguageAI } from '../utils/detectLanguage';
 import BorderGlow from './BorderGlow';
+import DotField from './DotField';
 
 type Tab = 'url' | 'connect';
 type BrowseView = 'auth' | 'repos' | 'files';
@@ -239,11 +240,26 @@ export const GitHubImportModal: React.FC<Props> = ({ isOpen, onClose, onImport, 
         fillOpacity={0.3}
         className={`w-[640px] max-h-[85vh] transition-all duration-300 ease-out transform ${isActive ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}
       >
-        <div className={`${bg} rounded-2xl flex flex-col overflow-hidden h-full`}
+        <div className={`${bg} rounded-2xl flex flex-col overflow-hidden h-full relative`}
           onClick={e => e.stopPropagation()}>
 
+        {/* DotField Background */}
+        <div className="absolute inset-0 z-0 opacity-35 pointer-events-none">
+          <DotField
+            dotRadius={1.5}
+            dotSpacing={16}
+            bulgeStrength={70}
+            glowRadius={160}
+            sparkle={true}
+            waveAmplitude={0}
+            gradientFrom={isDark ? 'rgba(202, 164, 247, 0.30)' : 'rgba(136, 57, 239, 0.25)'}
+            gradientTo={isDark ? 'rgba(139, 92, 246, 0.18)' : 'rgba(168, 85, 247, 0.18)'}
+            glowColor={isDark ? '#1a1a2e' : '#ffffff'}
+          />
+        </div>
+
         {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b ${border}`}>
+        <div className={`flex items-center justify-between px-6 py-4 border-b ${border} relative z-10`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg">
               <Github size={18} className="text-white" />
@@ -259,7 +275,7 @@ export const GitHubImportModal: React.FC<Props> = ({ isOpen, onClose, onImport, 
         </div>
 
         {/* Tabs */}
-        <div className={`flex border-b ${border} px-6`}>
+        <div className={`flex border-b ${border} px-6 relative z-10`}>
           {([['url', Link2, 'Paste URL'] as const, ['connect', Github, 'Connect GitHub'] as const]).map(([key, Icon, label]) => (
             <button key={key} onClick={() => setTab(key)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${tab === key
@@ -272,7 +288,7 @@ export const GitHubImportModal: React.FC<Props> = ({ isOpen, onClose, onImport, 
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10">
 
           {/* ── Grid Container for URL and Auth to sync height ── */}
           {(tab === 'url' || (tab === 'connect' && browseView === 'auth')) && (

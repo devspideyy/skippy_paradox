@@ -8,6 +8,7 @@ import { Send, MessageSquare } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { ChatMessage } from '../services/collabService';
 import BorderGlow from './BorderGlow';
+import DotField from './DotField';
 
 interface ChatPanelProps {
   isOpen: boolean;
@@ -66,9 +67,23 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       fillOpacity={0.2}
       className="h-full w-full"
     >
-      <div className={`flex flex-col h-full w-full ${panelBg}`}>
+      <div className={`flex flex-col h-full w-full ${panelBg} relative overflow-hidden`}>
+        {/* DotField Background */}
+        <div className="absolute inset-0 z-0 opacity-50">
+          <DotField
+            dotRadius={1.5}
+            dotSpacing={18}
+            bulgeStrength={60}
+            glowRadius={150}
+            sparkle={true}
+            waveAmplitude={0}
+            gradientFrom={isDark ? 'rgba(202, 164, 247, 0.25)' : 'rgba(136, 57, 239, 0.20)'}
+            gradientTo={isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(168, 85, 247, 0.15)'}
+            glowColor={isDark ? '#1E1E2A' : '#F0F2F6'}
+          />
+        </div>
         {/* Header */}
-        <div className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} shrink-0`}>
+        <div className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} shrink-0 relative z-10`}>
           <div className="flex items-center gap-2">
             <MessageSquare size={15} className="text-[#CAA4F7]" />
             <h2 className={`text-xs font-bold uppercase tracking-wider ${textMuted}`}>Room Chat</h2>
@@ -84,7 +99,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar relative z-10">
           {messages.length === 0 && (
             <div className={`flex flex-col items-center justify-center h-full py-8 ${textMuted}`}>
               <MessageSquare size={24} className="mb-2 opacity-40" />
@@ -129,7 +144,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
 
         {/* Input Area */}
-        <div className={`p-3 border-t ${borderColor} shrink-0`}>
+        <div className={`p-3 border-t ${borderColor} shrink-0 relative z-10`}>
           <form onSubmit={handleSend} className="relative">
             <input
               type="text"

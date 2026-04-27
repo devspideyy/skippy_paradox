@@ -2,6 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { loader } from '@monaco-editor/react';
 import { EditorView } from './components/EditorView';
 import { ThemeContext, useThemeProvider } from './hooks/useTheme';
+import { CommandPalette } from './components/CommandPalette';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { soundEffects } from './utils/soundEffects';
 import {
   getStoredFiles, saveFiles, getActiveFileId, setActiveFileId as saveActiveFileId,
   computeContentHash, StoredFile
@@ -11,6 +15,9 @@ import { fetchRawContent, getStoredToken, GitHubRepo, RepoTreeItem } from './ser
 import { GitHubImportModal } from './components/GitHubImportModal';
 import { CollabRoomModal } from './components/CollabRoomModal';
 import { useCollabRoom } from './hooks/useCollabRoom';
+import { 
+  Plus, Github, Users, Sun, Moon, Search 
+} from 'lucide-react';
 
 // Configure Monaco CDN path — @monaco-editor/react handles init internally
 loader.config({
@@ -18,6 +25,15 @@ loader.config({
     vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs'
   }
 });
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Service worker registration failed, app will work without offline support
+    });
+  });
+}
 
 export const App: React.FC = () => {
   const themeCtx = useThemeProvider();
@@ -28,10 +44,56 @@ export const App: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [showCollabModal, setShowCollabModal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   // ─── Collab Room ─────────────────────────────────────────────────────
   const collab = useCollabRoom();
   const autoSharedRef = useRef(false);
+
+  // ─── File Handlers ───────────────────────────────────────────────────
+  const handleFileCreate = useCallback(() => {
+    const newFile: StoredFile = {
+      id: Date.now().toString(),
+      name: `Snippet-${files.length + 1}`,
+      content: '',
+      language: '',
+      contentHash: computeContentHash(''),
+      lastModified: Date.now(),
+    };
+    setFiles(prev => [...prev, newFile]);
+    setActiveFileId(newFile.id);
+    soundEffects.success();
+  }, [files.length]);
+
+  // ─── Keyboard Shortcuts ──────────────────────────────────────────────
+  useKeyboardShortcuts([
+    {
+      key: 'k',
+      ctrl: true,
+      action: () => setShowCommandPalette(true),
+      description: 'Open command palette'
+    },
+    {
+      key: 'n',
+      ctrl: true,
+      action: handleFileCreate,
+      description: 'Create new file'
+    },
+    {
+      key: 'd',
+      ctrl: true,
+      shift: true,
+      action: themeCtx.toggleTheme,
+      description: 'Toggle theme'
+    },
+    {
+      key: 'g',
+      ctrl: true,
+      shift: true,
+      action: () => setShowGitHubModal(true),
+      description: 'Import from GitHub'
+    },
+  ], true);
 
   // Auto-share the active file when host creates a room
   useEffect(() => {
@@ -84,19 +146,6 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (isInitialized && activeFileId) saveActiveFileId(activeFileId);
   }, [activeFileId, isInitialized]);
-
-  const handleFileCreate = useCallback(() => {
-    const newFile: StoredFile = {
-      id: Date.now().toString(),
-      name: `Snippet-${files.length + 1}`,
-      content: '',
-      language: '',
-      contentHash: computeContentHash(''),
-      lastModified: Date.now(),
-    };
-    setFiles(prev => [...prev, newFile]);
-    setActiveFileId(newFile.id);
-  }, [files.length]);
 
   const handleFileUpload = useCallback(async (file: File) => {
     const text = await file.text();
@@ -159,6 +208,7 @@ export const App: React.FC = () => {
     };
     setFiles(prev => [...prev, newFile]);
     setActiveFileId(fileId);
+    soundEffects.success();
     // Refine with Magika AI in background
     detectLanguageAI(fileName, content).then(aiLang => {
       if (aiLang && aiLang !== language) {
@@ -193,6 +243,7 @@ export const App: React.FC = () => {
     });
     setFiles(prev => [...prev, ...newFiles]);
     if (newFiles.length > 0) setActiveFileId(newFiles[0].id);
+    soundEffects.success();
   }, []);
 
   // ─── Lazy File Select (loads content on demand) ──────────────────────
@@ -247,41 +298,92 @@ export const App: React.FC = () => {
       }
       return next;
     });
+    soundEffects.success();
   }, [activeFileId]);
+
+  // ─── Command Palette Commands ────────────────────────────────────────
+  const commands = [
+    {
+      id: 'new-file',
+      label: 'Create New File',
+      icon: <Plus size={16} />,
+      action: handleFileCreate,
+      keywords: ['new', 'create', 'file', 'snippet'],
+      shortcut: 'Ctrl+N'
+    },
+    {
+      id: 'github-import',
+      label: 'Import from GitHub',
+      icon: <Github size={16} />,
+      action: () => setShowGitHubModal(true),
+      keywords: ['github', 'import', 'repository', 'repo'],
+      shortcut: 'Ctrl+Shift+G'
+    },
+    {
+      id: 'collab',
+      label: 'Start Collaboration',
+      icon: <Users size={16} />,
+      action: () => setShowCollabModal(true),
+      keywords: ['collab', 'collaborate', 'room', 'share'],
+    },
+    {
+      id: 'toggle-theme',
+      label: 'Toggle Theme',
+      icon: themeCtx.isDark ? <Sun size={16} /> : <Moon size={16} />,
+      action: themeCtx.toggleTheme,
+      keywords: ['theme', 'dark', 'light', 'mode'],
+      shortcut: 'Ctrl+Shift+D'
+    },
+    {
+      id: 'search',
+      label: 'Search Files',
+      icon: <Search size={16} />,
+      action: () => {}, // Implement search
+      keywords: ['search', 'find', 'filter'],
+      shortcut: 'Ctrl+F'
+    },
+  ];
 
   return (
     <ThemeContext.Provider value={themeCtx}>
-      <div className="min-h-screen font-sans flex flex-col relative overflow-hidden">
-        <EditorView
-          files={files}
-          activeFileId={activeFileId}
-          loadingFileId={loadingFileId}
-          onFileSelect={handleFileSelect}
-          onFileCreate={handleFileCreate}
-          onFileDelete={handleFileDelete}
-          onFileUpload={handleFileUpload}
-          onCodeChange={handleCodeChange}
-          onLanguageChange={handleLanguageChange}
-          onOpenGitHub={() => setShowGitHubModal(true)}
-          onOpenCollab={() => setShowCollabModal(true)}
-          onRepoDelete={handleRepoDelete}
-          collab={collab}
-        />
-        <GitHubImportModal
-          isOpen={showGitHubModal}
-          onClose={() => setShowGitHubModal(false)}
-          onImport={handleGitHubImport}
-          onImportRepo={handleRepoImport}
-        />
-        <CollabRoomModal
-          isOpen={showCollabModal}
-          onClose={() => { setShowCollabModal(false); collab.clearJoinError(); }}
-          onCreateRoom={(name, id) => { collab.createRoom(name, id); setShowCollabModal(false); }}
-          onJoinRoom={(name, id) => { collab.joinRoom(name, id); }}
-          joinError={collab.joinError}
-          onClearJoinError={collab.clearJoinError}
-        />
-      </div>
+      <ErrorBoundary>
+        <div className="min-h-screen font-sans flex flex-col relative overflow-hidden">
+          <EditorView
+            files={files}
+            activeFileId={activeFileId}
+            loadingFileId={loadingFileId}
+            onFileSelect={handleFileSelect}
+            onFileCreate={handleFileCreate}
+            onFileDelete={handleFileDelete}
+            onFileUpload={handleFileUpload}
+            onCodeChange={handleCodeChange}
+            onLanguageChange={handleLanguageChange}
+            onOpenGitHub={() => setShowGitHubModal(true)}
+            onOpenCollab={() => setShowCollabModal(true)}
+            onRepoDelete={handleRepoDelete}
+            collab={collab}
+          />
+          <GitHubImportModal
+            isOpen={showGitHubModal}
+            onClose={() => setShowGitHubModal(false)}
+            onImport={handleGitHubImport}
+            onImportRepo={handleRepoImport}
+          />
+          <CollabRoomModal
+            isOpen={showCollabModal}
+            onClose={() => { setShowCollabModal(false); collab.clearJoinError(); }}
+            onCreateRoom={(name, id) => { collab.createRoom(name, id); setShowCollabModal(false); soundEffects.success(); }}
+            onJoinRoom={(name, id) => { collab.joinRoom(name, id); }}
+            joinError={collab.joinError}
+            onClearJoinError={collab.clearJoinError}
+          />
+          <CommandPalette
+            isOpen={showCommandPalette}
+            onClose={() => setShowCommandPalette(false)}
+            commands={commands}
+          />
+        </div>
+      </ErrorBoundary>
     </ThemeContext.Provider>
   );
 };

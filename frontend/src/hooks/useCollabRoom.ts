@@ -7,6 +7,7 @@ import {
   CollabProvider, CollabMember, PendingRequest, CollabStatus,
   SharedFileInfo, CollabEvents, getRandomColor, ChatMessage,
 } from '../services/collabService';
+import { soundEffects } from '../utils/soundEffects';
 
 export type CollabToast = {
   id: string;
@@ -139,13 +140,22 @@ export function useCollabRoom() {
       }));
     },
     onMembersUpdate: (members: CollabMember[], pending: PendingRequest[]) => {
-      setState(prev => ({ ...prev, members, pending }));
+      setState(prev => {
+        // Detect new members (user joined)
+        const newMembers = members.filter(m => !prev.members.some(pm => pm.peerId === m.peerId));
+        if (newMembers.length > 0) {
+          soundEffects.userJoined();
+        }
+        return { ...prev, members, pending };
+      });
     },
     onJoinRequest: (req: PendingRequest) => {
       addToast(`${req.displayName} wants to join`, 'info', { dedupKey: `join-${req.displayName}` });
+      soundEffects.notification();
     },
     onPeerLeft: (_pid: string, name: string) => {
       addToast(`${name} left the room`, 'warning', { dedupKey: `left-${name}` });
+      soundEffects.userLeft();
     },
     onPromotedToHost: () => {
       setState(prev => ({ ...prev, isHost: true }));
@@ -233,10 +243,16 @@ export function useCollabRoom() {
       addToast('You joined the room!', 'success', { dedupKey: 'approved' });
     },
     onChatMessage: (message: ChatMessage) => {
-      setState(prev => ({
-        ...prev,
-        chatMessages: [...prev.chatMessages, message],
-      }));
+      setState(prev => {
+        // Only play sound for messages from others
+        if (message.peerId !== prev.peerId) {
+          soundEffects.messageReceived();
+        }
+        return {
+          ...prev,
+          chatMessages: [...prev.chatMessages, message],
+        };
+      });
     },
   };
 

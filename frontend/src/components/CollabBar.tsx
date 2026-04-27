@@ -84,7 +84,7 @@ export const CollabBar: React.FC<Props> = ({
                 <span className="text-[10px] text-green-400 font-normal">LIVE</span>
               </div>
             )}
-          </span>
+          </div>
 
           {/* Room ID */}
           <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#CAA4F7]/15 text-[#CAA4F7] hover:bg-[#CAA4F7]/25 transition-colors" title="Copy Room ID">

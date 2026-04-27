@@ -16,10 +16,22 @@ The DotField component from React Bits has been successfully integrated into Cod
 1. **`src/components/DotField.tsx`** - Main component (TypeScript conversion)
 2. **`src/components/DotField.css`** - Component styles
 
-### Integration Location
-The DotField is displayed as a background on the welcome screen when no file is active:
-- Desktop view: Inside the main editor panel
-- Mobile view: Inside the mobile editor layout
+### Integration Locations
+The DotField is now integrated throughout the application as an interactive background:
+
+#### Main Application
+- **Welcome Screen** (EditorView) - Full-featured display when no file is active
+  - Desktop and mobile views
+  - Prominent display with welcome message overlay
+
+#### Side Panels
+- **ChatPanel** - Subtle background (30% opacity, reduced interactivity)
+- **GeminiPanel** - Subtle background (30% opacity, reduced interactivity)
+
+#### Modals
+- **GitHubImportModal** - Background animation (20% opacity with sparkle)
+- **CollabRoomModal** - Background animation (20% opacity with sparkle)
+- **CommandPalette** - Background animation (20% opacity with sparkle)
 
 ### Color Scheme
 
@@ -35,7 +47,8 @@ The DotField is displayed as a background on the welcome screen when no file is 
 
 ### Configuration
 
-Current settings optimized for CodeCollab:
+#### Welcome Screen (Full Featured)
+Current settings optimized for the main welcome screen:
 
 ```tsx
 <DotField
@@ -51,7 +64,81 @@ Current settings optimized for CodeCollab:
 />
 ```
 
+#### Side Panels (Subtle)
+Settings for ChatPanel and GeminiPanel:
+
+```tsx
+<div className="absolute inset-0 z-0 opacity-30">
+  <DotField
+    dotRadius={1.2}
+    dotSpacing={20}
+    bulgeStrength={50}
+    glowRadius={140}
+    sparkle={false}
+    waveAmplitude={0}
+    gradientFrom={isDark ? 'rgba(202, 164, 247, 0.15)' : 'rgba(136, 57, 239, 0.12)'}
+    gradientTo={isDark ? 'rgba(139, 92, 246, 0.08)' : 'rgba(168, 85, 247, 0.08)'}
+    glowColor={isDark ? '#1E1E2A' : '#F0F2F6'}
+  />
+</div>
+```
+
+#### Modals (Background Animation)
+Settings for GitHubImportModal, CollabRoomModal, and CommandPalette:
+
+```tsx
+<div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+  <DotField
+    dotRadius={1.2-1.3}
+    dotSpacing={18}
+    bulgeStrength={55-60}
+    glowRadius={140-150}
+    sparkle={true}
+    waveAmplitude={0}
+    gradientFrom={isDark ? 'rgba(202, 164, 247, 0.16-0.18)' : 'rgba(136, 57, 239, 0.13-0.15)'}
+    gradientTo={isDark ? 'rgba(139, 92, 246, 0.09-0.10)' : 'rgba(168, 85, 247, 0.09-0.10)'}
+    glowColor={isDark ? '#1a1a2e' : '#ffffff'}
+  />
+</div>
+```
+
+## Design Philosophy
+
+### Layered Integration
+The DotField is integrated at different intensity levels throughout the application:
+
+1. **Primary Focus** (Welcome Screen) - Full opacity, full interactivity
+   - Main attraction when no file is active
+   - Draws attention and creates visual interest
+
+2. **Ambient Background** (Side Panels) - 30% opacity, reduced interactivity
+   - Subtle presence that doesn't distract from content
+   - Maintains visual consistency across the app
+   - Adds depth without overwhelming the UI
+
+3. **Modal Enhancement** (Dialogs) - 20% opacity, sparkle enabled
+   - Adds visual polish to modal interactions
+   - Creates a cohesive branded experience
+   - Pointer events disabled to prevent interference
+
+### Z-Index Strategy
+All DotField implementations use proper z-index layering:
+- DotField: `z-0` (background layer)
+- Content: `z-10` (foreground layer)
+- Ensures content remains interactive and readable
+
 ## Customization
+
+### Adjusting Interactivity
+To make the effect more/less responsive:
+   - Creates a cohesive branded experience
+   - Pointer events disabled to prevent interference
+
+### Z-Index Strategy
+All DotField implementations use proper z-index layering:
+- DotField: `z-0` (background layer)
+- Content: `z-10` (foreground layer)
+- Ensures content remains interactive and readable
 
 ### Adjusting Interactivity
 To make the effect more/less responsive:
@@ -169,4 +256,5 @@ Potential improvements:
 
 **Integrated**: April 27, 2026  
 **Component Source**: React Bits (Open Source)  
-**License**: MIT (assumed from open-source nature)
+**License**: MIT (assumed from open-source nature)  
+**Integration Scope**: Application-wide (7 locations)

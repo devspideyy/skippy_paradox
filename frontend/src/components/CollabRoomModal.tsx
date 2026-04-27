@@ -11,6 +11,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useMountTransition } from '../hooks/useMountTransition';
 import { X, Users, Plus, LogIn, Copy, Check } from 'lucide-react';
 import BorderGlow from './BorderGlow';
+import DotField from './DotField';
 
 interface Props {
   isOpen: boolean;
@@ -91,11 +92,25 @@ export const CollabRoomModal: React.FC<Props> = ({ isOpen, onClose, onCreateRoom
         className={`w-full max-w-md mx-4 transition-all duration-300 ease-out transform ${isActive ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}
       >
         <div
-          className={`${bg} rounded-2xl overflow-hidden`}
+          className={`${bg} rounded-2xl overflow-hidden relative`}
           onClick={e => e.stopPropagation()}
         >
+        {/* DotField Background */}
+        <div className="absolute inset-0 z-0 opacity-35 pointer-events-none">
+          <DotField
+            dotRadius={1.5}
+            dotSpacing={16}
+            bulgeStrength={70}
+            glowRadius={160}
+            sparkle={true}
+            waveAmplitude={0}
+            gradientFrom={isDark ? 'rgba(202, 164, 247, 0.30)' : 'rgba(136, 57, 239, 0.25)'}
+            gradientTo={isDark ? 'rgba(139, 92, 246, 0.18)' : 'rgba(168, 85, 247, 0.18)'}
+            glowColor={isDark ? '#1a1a2e' : '#ffffff'}
+          />
+        </div>
         {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b ${border}`}>
+        <div className={`flex items-center justify-between px-6 py-4 border-b ${border} relative z-10`}>
           <div className="flex items-center gap-2">
             <Users size={20} className="text-[#CAA4F7]" />
             <h2 className={`text-lg font-bold ${textP}`}>Live Collaboration</h2>
@@ -106,7 +121,7 @@ export const CollabRoomModal: React.FC<Props> = ({ isOpen, onClose, onCreateRoom
         </div>
 
         {/* Tabs */}
-        <div className={`flex border-b ${border}`}>
+        <div className={`flex border-b ${border} relative z-10`}>
           {(['create', 'join'] as const).map(t => (
             <button
               key={t}
@@ -127,7 +142,7 @@ export const CollabRoomModal: React.FC<Props> = ({ isOpen, onClose, onCreateRoom
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-6 py-5 space-y-4 relative z-10">
           {/* Display Name (shared by both tabs) */}
           <div>
             <label className={`block text-xs font-bold mb-1.5 ${textM}`}>DISPLAY NAME</label>

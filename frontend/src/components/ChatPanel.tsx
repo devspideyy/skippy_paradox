@@ -99,15 +99,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar relative z-10">
-          {messages.length === 0 && (
+        <div className="flex-1 overflow-hidden p-3 space-y-3 relative z-10">
+          <div className="h-full overflow-y-auto custom-scrollbar">
+            {messages.length === 0 && (
             <div className={`flex flex-col items-center justify-center h-full py-8 ${textMuted}`}>
               <MessageSquare size={24} className="mb-2 opacity-40" />
               <p className="text-xs">No messages yet</p>
               <p className="text-[10px] mt-1 opacity-50">Say hello to your collaborators!</p>
             </div>
-          )}
-          {messages.map((msg) => {
+            )}
+            {messages.map((msg) => {
             const isSelf = msg.peerId === selfPeerId;
             return (
               <div key={msg.id} className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>

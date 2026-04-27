@@ -372,10 +372,10 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
                 {/* Horizontal Resize Handle */}
                 <Separator
-                  className={`group relative flex items-center justify-center h-[5px] cursor-row-resize select-none transition-colors
+                  className={`group relative flex items-center justify-center h-[5px] cursor-row-resize select-none transition-all duration-150 ease-out
                     ${isDark ? 'bg-slate-800/60 hover:bg-emerald-500/40' : 'bg-slate-300/60 hover:bg-emerald-400/40'}`}
                 >
-                  <div className={`h-[3px] w-8 rounded-full transition-all duration-150
+                  <div className={`h-[3px] w-8 rounded-full transition-all duration-200 ease-out
                     ${isDark ? 'bg-slate-600 group-hover:bg-emerald-400 group-active:bg-emerald-300' : 'bg-slate-400 group-hover:bg-emerald-500 group-active:bg-emerald-600'}
                     group-hover:w-12 group-active:w-16`}
                   />
@@ -462,10 +462,10 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
               {/* Horizontal Resize Handle */}
               <Separator
-                className={`group relative flex items-center justify-center h-[5px] cursor-row-resize select-none transition-colors
+                className={`group relative flex items-center justify-center h-[5px] cursor-row-resize select-none transition-all duration-150 ease-out
                   ${isDark ? 'bg-slate-800/60 hover:bg-emerald-500/40' : 'bg-slate-300/60 hover:bg-emerald-400/40'}`}
               >
-                <div className={`h-[3px] w-8 rounded-full transition-all duration-150
+                <div className={`h-[3px] w-8 rounded-full transition-all duration-200 ease-out
                   ${isDark ? 'bg-slate-600 group-hover:bg-emerald-400 group-active:bg-emerald-300' : 'bg-slate-400 group-hover:bg-emerald-500 group-active:bg-emerald-600'}
                   group-hover:w-12 group-active:w-16`}
                 />
@@ -490,7 +490,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
       </div>
 
       {/* ── Status bar ──────────────────────────────────────────────── */}
-      <div className={`h-8 flex items-center justify-between px-2 sm:px-4 text-[10px] sm:text-[12px] kode-font font-black ${isDark ? 'bg-[#181821] text-white/70' : 'bg-[#DBDFE7] text-slate-500/30'}`}>
+      <div className={`h-8 flex items-center justify-between px-2 sm:px-4 text-[10px] sm:text-[12px] kode-font font-black ${isDark ? 'bg-[#181821] text-white/70' : 'bg-[#DBDFE7] text-slate-700'}`}>
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-1.5 h-4">
             <FileCode size={14} className="hidden sm:block" />
@@ -498,7 +498,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
           </div>
           {activeFile && (
             <div className="flex items-center animate-fade-in">
-              <div className={`flex items-center gap-2 h-6 transition-colors ${isDark ? 'text-white/70' : 'text-slate-500/30'}`}>
+              <div className={`flex items-center gap-2 h-6 transition-colors ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
                 <LanguageIcon language={activeFile.language} size={14} />
                 <span>{activeFile.language ? activeFile.language.toUpperCase() : 'AUTO DETECTING...'}</span>
               </div>

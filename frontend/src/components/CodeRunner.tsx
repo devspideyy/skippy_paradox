@@ -61,7 +61,8 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({ code, language, fileName
 
   const bg = isDark ? 'bg-[#1a1a2e]' : 'bg-white';
   const border = isDark ? 'border-slate-700/50' : 'border-slate-200';
-  const textMuted = isDark ? 'text-slate-400' : 'text-slate-500';
+  const textMuted = isDark ? 'text-slate-400' : 'text-slate-600';
+  const textPrimary = isDark ? 'text-white' : 'text-slate-900';
   const inputBg = isDark ? 'bg-[#232340] border-slate-600/50' : 'bg-slate-50 border-slate-300';
   const outputBg = isDark ? 'bg-[#0d0d1a]' : 'bg-slate-900';
 

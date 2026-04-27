@@ -15,31 +15,52 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   selfPeerId: string;
   onSendMessage: (text: string) => void;
+  canSend?: boolean;
   onClose?: () => void;
 }
 
+const MAX_MESSAGE_LENGTH = 1200;
+
 export const ChatPanel: React.FC<ChatPanelProps> = ({
-  isOpen: _isOpen,
+  isOpen,
   messages,
   selfPeerId,
   onSendMessage,
+  canSend = true,
   onClose,
 }) => {
   const { isDark } = useTheme();
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isOpen]);
+
+  useEffect(() => {
+    if (isOpen && canSend) {
+      inputRef.current?.focus();
+    }
+  }, [isOpen, canSend]);
+
+  if (!isOpen) return null;
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim()) return;
-    onSendMessage(inputValue.trim());
+    if (!canSend) return;
+
+    const value = inputValue.trim();
+    if (!value) return;
+
+    onSendMessage(value);
     setInputValue('');
   };
+
+  const remainingChars = MAX_MESSAGE_LENGTH - inputValue.length;
 
   const formatTime = (ts: number) => {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -65,9 +86,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       glowIntensity={0.8}
       glowColor="280 60 85"
       fillOpacity={0.2}
-      className="h-full w-full"
+      className="h-full w-full no-panel-scroll"
     >
-      <div className={`flex flex-col h-full w-full ${panelBg} relative overflow-hidden`}>
+      <div className={`flex flex-col min-h-0 h-full w-full ${panelBg} relative overflow-hidden`}>
         {/* DotField Background */}
         <div className="absolute inset-0 z-0 opacity-70">
           <DotField
@@ -99,7 +120,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-hidden relative z-10">
+        <div className="flex-1 min-h-0 overflow-hidden relative z-10">
           <div className="h-full overflow-y-auto scrollbar-hide p-3 space-y-3">
             {messages.length === 0 && (
               <div className={`flex flex-col items-center justify-center h-full py-8 ${textMuted}`}>
@@ -149,17 +170,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div className={`p-3 border-t ${borderColor} shrink-0 relative z-10`}>
           <form onSubmit={handleSend} className="relative">
             <input
+              ref={inputRef}
               type="text"
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Type a message..."
+              onChange={(e) => setInputValue(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
+              placeholder={canSend ? 'Type a message...' : 'Chat is available after you join the room'}
+              disabled={!canSend}
+              maxLength={MAX_MESSAGE_LENGTH}
               className={`w-full pl-3 pr-10 py-2 rounded-lg text-[12px] focus:outline-none transition-colors border ${inputBg} ${textPrimary} placeholder:text-slate-400/60 focus:ring-1 focus:ring-[#CAA4F7]/50 focus:border-[#CAA4F7]/50`}
             />
             <button
               type="submit"
-              disabled={!inputValue.trim()}
+              disabled={!canSend || !inputValue.trim()}
               className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors ${
-                !inputValue.trim()
+                !canSend || !inputValue.trim()
                   ? 'opacity-30 cursor-not-allowed'
                   : 'text-[#CAA4F7] hover:bg-[#CAA4F7]/10'
               }`}
@@ -167,6 +191,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <Send size={14} />
             </button>
           </form>
+          <div className={`mt-1.5 flex items-center justify-between text-[10px] ${textMuted}`}>
+            <span>{canSend ? 'Press Enter to send' : 'Waiting for room connection'}</span>
+            <span className={remainingChars < 80 ? 'text-amber-400' : ''}>{remainingChars}</span>
+          </div>
         </div>
       </div>
     </BorderGlow>

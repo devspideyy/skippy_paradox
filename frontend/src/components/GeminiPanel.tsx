@@ -23,6 +23,8 @@ interface GeminiPanelProps {
 }
 
 const GEMINI_API_KEY_STORAGE = 'gemini-api-key';
+const MAX_HISTORY_MESSAGES = 10;
+const MAX_FILE_CONTEXT_CHARS = 12000;
 
 // Quick-action prompts
 const QUICK_ACTIONS = [
@@ -125,6 +127,13 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
   const [keyStats, setKeyStats] = useState(geminiKeyRotation.getUsageStats());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const createMessageId = useCallback(() => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  }, []);
+
   useEffect(() => {
     if (!isLoading) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -134,27 +143,66 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
   const buildContext = useCallback(() => {
     if (!activeFile) return '';
     const lang = activeFile.language || 'plaintext';
-    return `\`\`\`${lang}\n// File: ${activeFile.name}\n${activeFile.content}\n\`\`\``;
+    const fullContent = activeFile.content || '';
+    const content = fullContent.length > MAX_FILE_CONTEXT_CHARS
+      ? `${fullContent.slice(0, MAX_FILE_CONTEXT_CHARS)}\n\n[Truncated for context window]`
+      : fullContent;
+
+    return `\`\`\`${lang}\n// File: ${activeFile.name}\n${content}\n\`\`\``;
   }, [activeFile]);
+
+  const buildGeminiContents = useCallback((userText: string) => {
+    const history = messages
+      .filter((m) => !m.loading && m.content.trim())
+      .slice(-MAX_HISTORY_MESSAGES)
+      .map((m) => ({
+        role: (m.role === 'assistant' ? 'model' : 'user') as 'user' | 'model',
+        parts: [{ text: m.content }],
+      }));
+
+    const context = buildContext();
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+
+    if (context) {
+      contents.push({
+        role: 'user',
+        parts: [{
+          text: `You are an expert coding assistant in CodeCollab. Use this file context when relevant:\n\n${context}`,
+        }],
+      });
+    }
+
+    contents.push(...history);
+    contents.push({ role: 'user', parts: [{ text: userText }] });
+
+    return contents;
+  }, [buildContext, messages]);
 
   const sendMessage = useCallback(async (userText: string) => {
     if (!userText.trim() || isLoading) return;
 
     const currentKey = localStorage.getItem(GEMINI_API_KEY_STORAGE) || geminiKeyRotation.getCurrentKey();
-    if (!currentKey) return;
+    if (!currentKey) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: createMessageId(),
+          role: 'assistant',
+          content: 'Error: No Gemini API key found. Add a key in settings or key rotation to start chatting.',
+        },
+      ]);
+      return;
+    }
 
-    const context = buildContext();
-    const fullPrompt = context
-      ? `Here is the current file (${activeFile?.name}):\n\n${context}\n\n${userText}`
-      : userText;
+    const requestContents = buildGeminiContents(userText);
 
     const userMsg: Message = {
-      id: Date.now().toString(),
+      id: createMessageId(),
       role: 'user',
       content: userText,
     };
     const loadingMsg: Message = {
-      id: (Date.now() + 1).toString(),
+      id: createMessageId(),
       role: 'assistant',
       content: '',
       loading: true,
@@ -171,8 +219,8 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: fullPrompt }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+            contents: requestContents,
+            generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
           }),
         }
       );
@@ -204,7 +252,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, buildContext, activeFile]);
+  }, [isLoading, buildGeminiContents, createMessageId]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -233,9 +281,9 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
       glowIntensity={0.8}
       glowColor="280 60 85"
       fillOpacity={0.2}
-      className="h-full w-full"
+      className="h-full w-full no-panel-scroll"
     >
-      <div className={`flex flex-col h-full w-full ${panelBg} relative overflow-hidden`}>
+      <div className={`flex flex-col min-h-0 h-full w-full ${panelBg} relative overflow-hidden`}>
         {/* DotField Background */}
         <div className="absolute inset-0 z-0 opacity-70">
           <DotField
@@ -345,7 +393,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
         )}
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-hidden relative z-10">
+        <div className="flex-1 min-h-0 overflow-hidden relative z-10">
           <div className="h-full overflow-y-auto scrollbar-hide p-3 space-y-3">
             {messages.length === 0 && (
               <div className={`flex flex-col items-center justify-center h-full py-8 ${textMuted}`}>

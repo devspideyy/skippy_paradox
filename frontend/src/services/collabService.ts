@@ -30,6 +30,12 @@ export interface CollabMember {
   displayName: string;
   color: string;
   isHost: boolean;
+  voice?: {
+    inVoice: boolean;
+    muted: boolean;
+    deafened: boolean;
+    speaking: boolean;
+  };
 }
 
 export interface PendingRequest {
@@ -349,6 +355,30 @@ export class CollabProvider {
   /** Send a chat message to the room */
   sendChatMessage(text: string) {
     this._sendJson({ type: 'chat-message', text });
+  }
+
+  /** Join the shared voice lobby for the room */
+  joinVoiceLobby() {
+    this._sendJson({ type: 'voice-join' });
+  }
+
+  /** Leave the shared voice lobby for the room */
+  leaveVoiceLobby() {
+    this._sendJson({ type: 'voice-leave' });
+  }
+
+  /** Update mute/deafen state for this peer */
+  setVoiceState(state: { muted: boolean; deafened: boolean }) {
+    this._sendJson({
+      type: 'voice-state',
+      muted: state.muted,
+      deafened: state.deafened,
+    });
+  }
+
+  /** Publish current voice activity (speaking indicator) */
+  setSpeaking(speaking: boolean) {
+    this._sendJson({ type: 'voice-speaking', speaking });
   }
 
   // ── Doc connection management ────────────────────────────────────────

@@ -111,6 +111,11 @@ html.light ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
+.border-glow-card.no-panel-scroll .border-glow-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* ─── Animations ─────────────────────────────────────────────────────── */
 
 @keyframes fadeIn {

@@ -47,6 +47,9 @@ class Room {
 
     /** @type {Map<string, { id: string, name: string, language: string, content: string }>} */
     this.sharedFiles = new Map();
+
+    /** @type {Map<string, { inVoice: boolean, muted: boolean, deafened: boolean, speaking: boolean }>} */
+    this.voiceStates = new Map();
   }
 
   broadcastJson(msg, excludePeerId = null) {
@@ -59,12 +62,22 @@ class Room {
   }
 
   getMembersList() {
-    return Array.from(this.members.entries()).map(([peerId, m]) => ({
-      peerId,
-      displayName: m.displayName,
-      color: m.color,
-      isHost: peerId === this.hostId,
-    }));
+    return Array.from(this.members.entries()).map(([peerId, m]) => {
+      const voice = this.voiceStates.get(peerId) || {
+        inVoice: false,
+        muted: false,
+        deafened: false,
+        speaking: false,
+      };
+
+      return {
+        peerId,
+        displayName: m.displayName,
+        color: m.color,
+        isHost: peerId === this.hostId,
+        voice,
+      };
+    });
   }
 
   getPendingList() {
@@ -352,6 +365,69 @@ function handleControlConnection(ws, roomId) {
         break;
       }
 
+      // ── Voice lobby: join ───────────────────────────────────
+      case 'voice-join': {
+        if (!room || !room.members.has(peerId)) return;
+        const prev = room.voiceStates.get(peerId);
+        room.voiceStates.set(peerId, {
+          inVoice: true,
+          muted: prev?.muted ?? false,
+          deafened: prev?.deafened ?? false,
+          speaking: false,
+        });
+        room.broadcastMembersUpdate();
+        break;
+      }
+
+      // ── Voice lobby: leave ──────────────────────────────────
+      case 'voice-leave': {
+        if (!room || !room.members.has(peerId)) return;
+        const prev = room.voiceStates.get(peerId);
+        room.voiceStates.set(peerId, {
+          inVoice: false,
+          muted: prev?.muted ?? false,
+          deafened: prev?.deafened ?? false,
+          speaking: false,
+        });
+        room.broadcastMembersUpdate();
+        break;
+      }
+
+      // ── Voice lobby: mute/deafen state ──────────────────────
+      case 'voice-state': {
+        if (!room || !room.members.has(peerId)) return;
+        const prev = room.voiceStates.get(peerId) || {
+          inVoice: false,
+          muted: false,
+          deafened: false,
+          speaking: false,
+        };
+
+        room.voiceStates.set(peerId, {
+          ...prev,
+          muted: Boolean(msg.muted),
+          deafened: Boolean(msg.deafened),
+          speaking: prev.inVoice ? prev.speaking : false,
+        });
+        room.broadcastMembersUpdate();
+        break;
+      }
+
+      // ── Voice lobby: speaking signal ────────────────────────
+      case 'voice-speaking': {
+        if (!room || !room.members.has(peerId)) return;
+        const prev = room.voiceStates.get(peerId);
+        if (!prev || !prev.inVoice) return;
+
+        const canSpeak = !prev.muted && !prev.deafened;
+        room.voiceStates.set(peerId, {
+          ...prev,
+          speaking: canSpeak ? Boolean(msg.speaking) : false,
+        });
+        room.broadcastMembersUpdate();
+        break;
+      }
+
       // ── Leave ───────────────────────────────────────────────
       case 'leave': {
         handleDisconnect(ws, peerId, room);
@@ -382,6 +458,7 @@ function handleDisconnect(ws, peerId, room) {
 
   room.members.delete(peerId);
   room.pending.delete(peerId);
+  room.voiceStates.delete(peerId);
 
   if (wasMember) {
     room.broadcastJson({ type: 'peer-left', peerId, displayName });

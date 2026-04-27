@@ -8,7 +8,6 @@ import { ChatPanel } from './ChatPanel';
 import { GeminiPanel } from './GeminiPanel';
 import { CodeRunner } from './CodeRunner';
 import DotField from './DotField';
-import Dock, { DockItemData } from './Dock';
 import { StoredFile } from '../services/storageService';
 import { SharedFileInfo } from '../services/collabService';
 import { useTheme } from '../hooks/useTheme';
@@ -109,11 +108,13 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isGeminiOpen, setIsGeminiOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [cursorPosition, setCursorPosition] = useState({ ln: 1, col: 1 });
   const [selectionCount, setSelectionCount] = useState(0);
   const [fontSize] = useState(() => parseInt(localStorage.getItem('editor-font-size') || '16', 10));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastChatCountRef = useRef(0);
 
   useEffect(() => { setCursorPosition({ ln: 1, col: 1 }); setSelectionCount(0); }, [activeFileId]);
 
@@ -129,6 +130,30 @@ export const EditorView: React.FC<EditorViewProps> = ({
   }, [activeFile?.id, activeFile?.language, activeFile?.name, activeFile?.content, onLanguageChange]);
 
   useEffect(() => { localStorage.setItem('editor-font-size', fontSize.toString()); }, [fontSize]);
+
+  useEffect(() => {
+    const currentCount = collab.chatMessages.length;
+
+    if (isChatOpen) {
+      setUnreadChatCount(0);
+      lastChatCountRef.current = currentCount;
+      return;
+    }
+
+    if (collab.status === 'connected' && currentCount > lastChatCountRef.current) {
+      setUnreadChatCount((prev) => prev + (currentCount - lastChatCountRef.current));
+    }
+
+    lastChatCountRef.current = currentCount;
+  }, [collab.chatMessages.length, collab.status, isChatOpen]);
+
+  useEffect(() => {
+    if (!collab.roomId) {
+      setUnreadChatCount(0);
+      lastChatCountRef.current = 0;
+      setIsChatOpen(false);
+    }
+  }, [collab.roomId]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -163,56 +188,6 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const textMuted = isDark ? 'text-slate-400' : 'text-slate-500';
   const textPrimary = isDark ? 'text-white' : 'text-slate-900';
   const borderColor = isDark ? 'border-slate-800/50' : 'border-slate-300/50';
-
-  // Dock items configuration
-  const dockItems: DockItemData[] = [
-    {
-      icon: <Plus size={20} />,
-      label: 'New File',
-      onClick: onFileCreate,
-      className: 'hover:bg-purple-500/20'
-    },
-    {
-      icon: <Upload size={20} />,
-      label: 'Upload',
-      onClick: () => fileInputRef.current?.click(),
-      className: 'hover:bg-blue-500/20'
-    },
-    {
-      icon: <Github size={20} />,
-      label: 'GitHub',
-      onClick: onOpenGitHub,
-      className: 'hover:bg-slate-500/20'
-    },
-    {
-      icon: <Users size={20} />,
-      label: 'Collab',
-      onClick: onOpenCollab,
-      className: 'hover:bg-pink-500/20'
-    },
-    {
-      icon: <Code2 size={20} />,
-      label: 'Run Code',
-      onClick: () => {
-        // Focus on code runner panel
-        const runButton = document.querySelector('[aria-label="Run code"]') as HTMLButtonElement;
-        if (runButton) runButton.click();
-      },
-      className: 'hover:bg-green-500/20'
-    },
-    {
-      icon: <Sparkles size={20} />,
-      label: 'AI Assistant',
-      onClick: () => setIsGeminiOpen(prev => !prev),
-      className: 'hover:bg-blue-400/20'
-    },
-    {
-      icon: isDark ? <Sun size={20} /> : <Moon size={20} />,
-      label: isDark ? 'Light Mode' : 'Dark Mode',
-      onClick: toggleTheme,
-      className: 'hover:bg-amber-500/20'
-    }
-  ];
 
   return (
     <div className={`flex flex-col h-screen ${bg} text-slate-300 overflow-hidden`}>
@@ -269,6 +244,11 @@ export const EditorView: React.FC<EditorViewProps> = ({
               }`}
               title={isChatOpen ? 'Close Chat' : 'Open Chat'}
             >
+              {!isChatOpen && unreadChatCount > 0 && (
+                <span className="absolute -mt-5 ml-5 min-w-[16px] h-4 px-1 rounded-full bg-pink-500 text-white text-[9px] leading-4 font-bold">
+                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                </span>
+              )}
               {isChatOpen ? <PanelRightClose size={18} /> : <MessageSquare size={18} />}
             </button>
           )}
@@ -459,7 +439,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
               <ResizeHandle isDark={isDark} />
               <Panel defaultSize="22%" minSize="16%" maxSize="40%" className="flex flex-col min-w-0">
                 <ChatPanel isOpen={true} messages={collab.chatMessages} selfPeerId={collab.peerId}
-                  onSendMessage={collab.sendChatMessage} onClose={() => setIsChatOpen(false)} />
+                  onSendMessage={collab.sendChatMessage} canSend={collab.status === 'connected'} onClose={() => setIsChatOpen(false)} />
               </Panel>
             </>
           )}
@@ -533,7 +513,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
           )}
           {isInRoom && (
             <ChatPanel isOpen={isChatOpen} messages={collab.chatMessages} selfPeerId={collab.peerId}
-              onSendMessage={collab.sendChatMessage} onClose={() => setIsChatOpen(false)} />
+              onSendMessage={collab.sendChatMessage} canSend={collab.status === 'connected'} onClose={() => setIsChatOpen(false)} />
           )}
         </div>
 
@@ -633,19 +613,6 @@ export const EditorView: React.FC<EditorViewProps> = ({
           ))}
         </div>
       )}
-
-      {/* ── Dock ────────────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
-        <div className="pointer-events-auto">
-          <Dock 
-            items={dockItems}
-            magnification={70}
-            distance={150}
-            panelHeight={68}
-            baseItemSize={50}
-          />
-        </div>
-      </div>
     </div>
   );
 };

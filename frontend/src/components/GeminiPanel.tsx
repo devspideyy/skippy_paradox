@@ -409,11 +409,29 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
   const sendMessage = useCallback(async (userText: string) => {
     if (!userText.trim() || isLoading) return;
 
+    if (!localStorage.getItem(GEMINI_API_KEY_STORAGE) && !geminiKeyRotation.hasAvailableQuota()) {
+      const errMsg: Message = {
+        id: newId(),
+        role: 'assistant',
+        content: 'Daily free-tier quota reached for this browser. Please try again tomorrow or use your own API key.',
+        timestamp: Date.now(),
+      };
+      const next = [...messages, errMsg];
+      setMessages(next);
+      persistConversation(next);
+      return;
+    }
+
     const currentKey = localStorage.getItem(GEMINI_API_KEY_STORAGE) || geminiKeyRotation.getCurrentKey();
     if (!currentKey) {
+      const quotaMsg = localStorage.getItem(GEMINI_API_KEY_STORAGE)
+        ? 'No Gemini API key found. Add a key in settings to start chatting.'
+        : (geminiKeyRotation.hasKeys()
+          ? 'No free-tier key currently available (quota exhausted). Try again tomorrow or use your own API key.'
+          : 'No Gemini API key found. Add a key in settings to start chatting.');
       const errMsg: Message = {
         id: newId(), role: 'assistant',
-        content: 'No Gemini API key found. Add a key in settings to start chatting.',
+        content: quotaMsg,
         timestamp: Date.now(),
       };
       const next = [...messages, errMsg];

@@ -4,12 +4,15 @@
  */
 
 const KEY_ROTATION_STORAGE = 'gemini-key-rotation-state';
-const KEY_USAGE_LIMIT = 50; // Requests per key before rotation
+const KEY_USAGE_LIMIT = 25; // Requests per key before rotation (free-tier friendly)
+const DAILY_USAGE_LIMIT = 120; // Total requests per browser per day
 
 interface KeyRotationState {
   currentIndex: number;
   usageCounts: Record<number, number>;
   lastRotation: number;
+  dailyCount: number;
+  dailyWindowStart: number;
 }
 
 class GeminiKeyRotationService {
@@ -25,6 +28,7 @@ class GeminiKeyRotationService {
 
     // Load or initialize rotation state
     this.state = this.loadState();
+    this.ensureDailyWindow();
   }
 
   private loadState(): KeyRotationState {
@@ -41,7 +45,26 @@ class GeminiKeyRotationService {
       currentIndex: 0,
       usageCounts: {},
       lastRotation: Date.now(),
+      dailyCount: 0,
+      dailyWindowStart: Date.now(),
     };
+  }
+
+  private ensureDailyWindow(): void {
+    const start = new Date(this.state.dailyWindowStart || Date.now());
+    const now = new Date();
+    const sameUtcDay =
+      start.getUTCFullYear() === now.getUTCFullYear() &&
+      start.getUTCMonth() === now.getUTCMonth() &&
+      start.getUTCDate() === now.getUTCDate();
+
+    if (!sameUtcDay) {
+      this.state.dailyCount = 0;
+      this.state.dailyWindowStart = Date.now();
+      this.state.usageCounts = {};
+      this.state.currentIndex = 0;
+      this.saveState();
+    }
   }
 
   private saveState(): void {
@@ -56,7 +79,13 @@ class GeminiKeyRotationService {
    * Get the current API key to use
    */
   getCurrentKey(): string | null {
+    this.ensureDailyWindow();
+
     if (this.keys.length === 0) {
+      return null;
+    }
+
+    if (this.state.dailyCount >= DAILY_USAGE_LIMIT) {
       return null;
     }
 
@@ -73,8 +102,10 @@ class GeminiKeyRotationService {
    * Record that a key was used
    */
   recordUsage(): void {
+    this.ensureDailyWindow();
     const currentIndex = this.state.currentIndex;
     this.state.usageCounts[currentIndex] = (this.state.usageCounts[currentIndex] || 0) + 1;
+    this.state.dailyCount += 1;
     this.saveState();
   }
 
@@ -125,6 +156,8 @@ class GeminiKeyRotationService {
   resetUsage(): void {
     this.state.usageCounts = {};
     this.state.currentIndex = 0;
+    this.state.dailyCount = 0;
+    this.state.dailyWindowStart = Date.now();
     this.saveState();
     console.log('✅ API key usage counters reset');
   }
@@ -134,6 +167,16 @@ class GeminiKeyRotationService {
    */
   hasKeys(): boolean {
     return this.keys.length > 0;
+  }
+
+  hasAvailableQuota(): boolean {
+    this.ensureDailyWindow();
+    return this.state.dailyCount < DAILY_USAGE_LIMIT;
+  }
+
+  getDailyRemaining(): number {
+    this.ensureDailyWindow();
+    return Math.max(0, DAILY_USAGE_LIMIT - this.state.dailyCount);
   }
 
   /**

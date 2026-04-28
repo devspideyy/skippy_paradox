@@ -14,3 +14,4 @@ __pycache__/
 
 # Socket Backend
 backend-socket/node_modules/
+backend-socket/.env

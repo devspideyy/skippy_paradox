@@ -16,7 +16,7 @@ import { useTheme } from '../hooks/useTheme';
 import { detectLanguage, detectLanguageAI } from '../utils/detectLanguage';
 import {
   FileCode, Plus, Upload, Code2, FolderOpen, Sun, Moon,
-  Github, Users, X, MessageSquare, PanelRightClose, Menu, Sparkles, Headphones,
+  Github, Users, X, MessageSquare, PanelRightClose, Menu, Sparkles, Headphones, Play,
 } from 'lucide-react';
 import {
   JavaScript, TypeScript, Python, CPlusPlus, C, Java, Go, RustDark, Ruby, PHP,
@@ -92,6 +92,8 @@ interface EditorViewProps {
   collab: CollabHook;
 }
 
+type MobilePane = 'editor' | 'runner' | 'gemini' | 'chat' | 'voice';
+
 /* ── Component ─────────────────────────────────────────────────────── */
 export const EditorView: React.FC<EditorViewProps> = ({
   files, activeFileId, loadingFileId, onFileSelect, onFileCreate, onFileDelete, onFileUpload,
@@ -112,6 +114,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const [isGeminiOpen, setIsGeminiOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [mobilePane, setMobilePane] = useState<MobilePane>('editor');
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [cursorPosition, setCursorPosition] = useState({ ln: 1, col: 1 });
   const [selectionCount, setSelectionCount] = useState(0);
@@ -119,6 +122,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastChatCountRef = useRef(0);
+  const isInRoom = collab.status === 'connected' || collab.status === 'waiting-approval' || collab.status === 'connecting';
 
   useEffect(() => { setCursorPosition({ ln: 1, col: 1 }); setSelectionCount(0); }, [activeFileId]);
 
@@ -157,8 +161,15 @@ export const EditorView: React.FC<EditorViewProps> = ({
       lastChatCountRef.current = 0;
       setIsChatOpen(false);
       setIsVoiceOpen(false);
+      setMobilePane('editor');
     }
   }, [collab.roomId]);
+
+  useEffect(() => {
+    if (!isInRoom && (mobilePane === 'chat' || mobilePane === 'voice')) {
+      setMobilePane('editor');
+    }
+  }, [isInRoom, mobilePane]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -166,7 +177,6 @@ export const EditorView: React.FC<EditorViewProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const isInRoom = collab.status === 'connected' || collab.status === 'waiting-approval' || collab.status === 'connecting';
   const sharedFileIds = useMemo(() => new Set(collab.sharedFiles.map(f => f.id)), [collab.sharedFiles]);
   const isActiveFileShared = activeFileId ? sharedFileIds.has(activeFileId) : false;
 
@@ -195,7 +205,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const borderColor = isDark ? 'border-slate-800/50' : 'border-slate-300/50';
 
   return (
-    <div className={`flex flex-col h-screen ${bg} text-slate-300 overflow-hidden`}>
+    <div className={`flex flex-col h-[100dvh] ${bg} text-slate-300 overflow-hidden`}>
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className={`h-14 flex items-center justify-between px-4 ${isDark ? 'bg-[#181821]' : 'bg-[#DBDFE7]'} z-20 shadow-sm border-b ${borderColor}`}>
@@ -221,57 +231,59 @@ export const EditorView: React.FC<EditorViewProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Gemini toggle */}
-          <button
-            onClick={() => setIsGeminiOpen(prev => !prev)}
-            aria-label={isGeminiOpen ? 'Close AI Assistant panel' : 'Open AI Assistant panel'}
-            aria-expanded={isGeminiOpen}
-            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
-              isGeminiOpen
-                ? isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/15 text-blue-600'
-                : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-blue-400' : 'text-slate-500 hover:bg-slate-200 hover:text-blue-600'
-            }`}
-            title={isGeminiOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
-          >
-            <Sparkles size={17} />
-          </button>
+          <div className="hidden md:flex items-center gap-1.5">
+            {/* Gemini toggle */}
+            <button
+              onClick={() => setIsGeminiOpen(prev => !prev)}
+              aria-label={isGeminiOpen ? 'Close AI Assistant panel' : 'Open AI Assistant panel'}
+              aria-expanded={isGeminiOpen}
+              className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
+                isGeminiOpen
+                  ? isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-500/15 text-blue-600'
+                  : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-blue-400' : 'text-slate-500 hover:bg-slate-200 hover:text-blue-600'
+              }`}
+              title={isGeminiOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
+            >
+              <Sparkles size={17} />
+            </button>
 
-          {/* Voice + Chat toggle (collab only) */}
-          {isInRoom && (
-            <>
-              <button
-                onClick={() => setIsVoiceOpen(prev => !prev)}
-                aria-label={isVoiceOpen ? 'Close voice panel' : 'Open voice panel'}
-                aria-expanded={isVoiceOpen}
-                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
-                  isVoiceOpen
-                    ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-500/15 text-emerald-600'
-                    : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-emerald-400' : 'text-slate-500 hover:bg-slate-200 hover:text-emerald-600'
-                }`}
-                title={isVoiceOpen ? 'Close Voice' : 'Open Voice'}
-              >
-                <Headphones size={17} />
-              </button>
-              <button
-                onClick={() => setIsChatOpen(prev => !prev)}
-                aria-label={isChatOpen ? 'Close chat panel' : 'Open chat panel'}
-                aria-expanded={isChatOpen}
-                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
-                  isChatOpen
-                    ? isDark ? 'bg-[#CAA4F7]/20 text-[#CAA4F7]' : 'bg-[#CAA4F7]/15 text-[#9B6DD7]'
-                    : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-[#CAA4F7]' : 'text-slate-500 hover:bg-slate-200 hover:text-[#9B6DD7]'
-                }`}
-                title={isChatOpen ? 'Close Chat' : 'Open Chat'}
-              >
-                {!isChatOpen && unreadChatCount > 0 && (
-                  <span className="absolute -mt-5 ml-5 min-w-[16px] h-4 px-1 rounded-full bg-pink-500 text-white text-[9px] leading-4 font-bold">
-                    {unreadChatCount > 99 ? '99+' : unreadChatCount}
-                  </span>
-                )}
-                {isChatOpen ? <PanelRightClose size={18} /> : <MessageSquare size={18} />}
-              </button>
-            </>
-          )}
+            {/* Voice + Chat toggle (collab only) */}
+            {isInRoom && (
+              <>
+                <button
+                  onClick={() => setIsVoiceOpen(prev => !prev)}
+                  aria-label={isVoiceOpen ? 'Close voice panel' : 'Open voice panel'}
+                  aria-expanded={isVoiceOpen}
+                  className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
+                    isVoiceOpen
+                      ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-500/15 text-emerald-600'
+                      : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-emerald-400' : 'text-slate-500 hover:bg-slate-200 hover:text-emerald-600'
+                  }`}
+                  title={isVoiceOpen ? 'Close Voice' : 'Open Voice'}
+                >
+                  <Headphones size={17} />
+                </button>
+                <button
+                  onClick={() => setIsChatOpen(prev => !prev)}
+                  aria-label={isChatOpen ? 'Close chat panel' : 'Open chat panel'}
+                  aria-expanded={isChatOpen}
+                  className={`relative flex items-center justify-center w-8 h-8 rounded-lg transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${
+                    isChatOpen
+                      ? isDark ? 'bg-[#CAA4F7]/20 text-[#CAA4F7]' : 'bg-[#CAA4F7]/15 text-[#9B6DD7]'
+                      : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-[#CAA4F7]' : 'text-slate-500 hover:bg-slate-200 hover:text-[#9B6DD7]'
+                  }`}
+                  title={isChatOpen ? 'Close Chat' : 'Open Chat'}
+                >
+                  {!isChatOpen && unreadChatCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-pink-500 text-white text-[9px] leading-4 font-bold">
+                      {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                    </span>
+                  )}
+                  {isChatOpen ? <PanelRightClose size={18} /> : <MessageSquare size={18} />}
+                </button>
+              </>
+            )}
+          </div>
 
           {!isInRoom && (
             <button onClick={onOpenCollab}
@@ -291,7 +303,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
         )}
 
         {/* Mobile sidebar drawer */}
-        <div className={`fixed md:hidden inset-y-0 left-0 z-50 w-[280px] flex flex-col ${bg} border-r ${borderColor} transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className={`fixed md:hidden inset-y-0 left-0 z-50 w-[88vw] max-w-[320px] flex flex-col ${bg} border-r ${borderColor} transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className={`flex items-center justify-between px-4 py-3 border-b ${borderColor}`}>
             <span className={`font-bold ${textPrimary}`}>Files</span>
             <button onClick={() => setIsSidebarOpen(false)} className={`p-1.5 rounded-md ${textMuted} hover:bg-red-500/10 hover:text-red-500 transition-colors`}>
@@ -486,7 +498,57 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
         {/* Mobile: non-resizable layout */}
         <div className="flex-1 flex flex-col min-w-0 md:hidden">
-          {!activeFile ? (
+          <div className={`shrink-0 border-b ${borderColor} px-2 py-2 flex items-center gap-1 overflow-x-auto scrollbar-hide`}>
+            {([
+              { id: 'editor', label: 'Editor', icon: <Code2 size={13} /> },
+              { id: 'runner', label: 'Run', icon: <Play size={13} /> },
+              { id: 'gemini', label: 'AI', icon: <Sparkles size={13} /> },
+            ] as Array<{ id: MobilePane; label: string; icon: React.ReactNode }>).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setMobilePane(tab.id)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                  mobilePane === tab.id
+                    ? (isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-500/15 text-purple-700')
+                    : (isDark ? 'text-slate-400 bg-slate-800/40' : 'text-slate-600 bg-slate-200/70')
+                }`}
+              >
+                {tab.icon} {tab.label}
+              </button>
+            ))}
+
+            {isInRoom && (
+              <>
+                <button
+                  onClick={() => setMobilePane('chat')}
+                  className={`relative shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                    mobilePane === 'chat'
+                      ? (isDark ? 'bg-[#CAA4F7]/20 text-[#CAA4F7]' : 'bg-[#CAA4F7]/15 text-[#9B6DD7]')
+                      : (isDark ? 'text-slate-400 bg-slate-800/40' : 'text-slate-600 bg-slate-200/70')
+                  }`}
+                >
+                  <MessageSquare size={13} /> Chat
+                  {mobilePane !== 'chat' && unreadChatCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-pink-500 text-white text-[8px] leading-3.5 font-bold">
+                      {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setMobilePane('voice')}
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                    mobilePane === 'voice'
+                      ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-500/15 text-emerald-700')
+                      : (isDark ? 'text-slate-400 bg-slate-800/40' : 'text-slate-600 bg-slate-200/70')
+                  }`}
+                >
+                  <Headphones size={13} /> Voice
+                </button>
+              </>
+            )}
+          </div>
+
+          {mobilePane === 'editor' && !activeFile ? (
             <div className={`flex-1 flex flex-col items-center justify-center ${bgEditor} relative overflow-hidden`}>
               {/* DotField Background */}
               <div className="absolute inset-0 z-0">
@@ -511,7 +573,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
                 </button>
               </div>
             </div>
-          ) : (
+          ) : mobilePane === 'editor' ? (
             <Group direction="vertical" className="flex-1 relative overflow-hidden">
               {/* Editor Panel */}
               <Panel defaultSize="70%" minSize="40%" className="relative overflow-hidden">
@@ -548,10 +610,58 @@ export const EditorView: React.FC<EditorViewProps> = ({
                 />
               </Panel>
             </Group>
-          )}
-          {isInRoom && (
-            <ChatPanel isOpen={isChatOpen} messages={collab.chatMessages} selfPeerId={collab.peerId}
-              onSendMessage={collab.sendChatMessage} canSend={collab.status === 'connected'} onClose={() => setIsChatOpen(false)} />
+          ) : mobilePane === 'runner' ? (
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {activeFile ? (
+                <CodeRunner code={activeFile.content} language={activeFile.language} fileName={activeFile.name} />
+              ) : (
+                <div className={`h-full flex flex-col items-center justify-center ${bgEditor} ${textMuted}`}>
+                  <Play size={24} className="mb-2 opacity-50" />
+                  <p className="text-xs font-semibold">Open a file to run code</p>
+                </div>
+              )}
+            </div>
+          ) : mobilePane === 'gemini' ? (
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <GeminiPanel activeFile={activeFile} />
+            </div>
+          ) : mobilePane === 'chat' ? (
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {isInRoom ? (
+                <ChatPanel
+                  isOpen={true}
+                  messages={collab.chatMessages}
+                  selfPeerId={collab.peerId}
+                  onSendMessage={collab.sendChatMessage}
+                  canSend={collab.status === 'connected'}
+                  onClose={() => setMobilePane('editor')}
+                />
+              ) : (
+                <div className={`h-full flex flex-col items-center justify-center ${bgEditor} ${textMuted}`}>
+                  <MessageSquare size={24} className="mb-2 opacity-50" />
+                  <p className="text-xs font-semibold">Join a room to use chat</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {isInRoom ? (
+                <VoiceLobbyPanel
+                  isOpen={true}
+                  members={collab.members}
+                  selfPeerId={collab.peerId}
+                  provider={collab.provider}
+                  canUseVoice={collab.status === 'connected'}
+                  onClose={() => setMobilePane('editor')}
+                  voiceManager={collab.voiceManager}
+                />
+              ) : (
+                <div className={`h-full flex flex-col items-center justify-center ${bgEditor} ${textMuted}`}>
+                  <Headphones size={24} className="mb-2 opacity-50" />
+                  <p className="text-xs font-semibold">Join a room to use voice</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -593,7 +703,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
       {/* ── Toasts ──────────────────────────────────────────────────── */}
       {collab.toasts.length > 0 && (
-        <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2.5 pointer-events-none">
+        <div className="fixed top-4 left-3 right-3 sm:left-auto sm:right-4 z-[100] flex flex-col gap-2.5 pointer-events-none">
           {collab.toasts.map(toast => (
             <div key={toast.id}
               className={`pointer-events-auto relative flex items-center gap-3 pl-4 pr-3 py-3 min-w-[240px] max-w-[360px] rounded-2xl shadow-2xl text-[12px] font-semibold overflow-hidden

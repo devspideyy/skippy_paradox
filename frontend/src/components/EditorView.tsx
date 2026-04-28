@@ -197,6 +197,11 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
   const handleRemoveFromCollab = useCallback((fileId: string) => { collab.unshareFile(fileId); }, [collab]);
   const handleSelectCollabFile = useCallback((fileId: string) => { onFileSelect(fileId); }, [onFileSelect]);
+  const handleMobileFileSelect = useCallback((fileId: string) => {
+    onFileSelect(fileId);
+    setIsSidebarOpen(false);
+    setMobilePane('editor');
+  }, [onFileSelect]);
 
   const bg = isDark ? 'bg-[#1E1E2A]' : 'bg-[#E5E8EE]';
   const bgEditor = isDark ? 'bg-[#232332]' : 'bg-[#EEF1F5]';
@@ -205,7 +210,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const borderColor = isDark ? 'border-slate-800/50' : 'border-slate-300/50';
 
   return (
-    <div className={`flex flex-col h-[100dvh] ${bg} text-slate-300 overflow-hidden`}>
+    <div className={`flex flex-col h-[100dvh] ${bg} text-slate-300 overflow-hidden overflow-x-hidden`}>
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className={`h-14 flex items-center justify-between px-4 ${isDark ? 'bg-[#181821]' : 'bg-[#DBDFE7]'} z-20 shadow-sm border-b ${borderColor}`}>
@@ -303,7 +308,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
         )}
 
         {/* Mobile sidebar drawer */}
-        <div className={`fixed md:hidden inset-y-0 left-0 z-50 w-[88vw] max-w-[320px] flex flex-col ${bg} border-r ${borderColor} transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className={`fixed md:hidden inset-y-0 left-0 z-50 w-[86vw] max-w-[320px] flex flex-col ${bg} border-r ${borderColor} transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className={`flex items-center justify-between px-4 py-3 border-b ${borderColor}`}>
             <span className={`font-bold ${textPrimary}`}>Files</span>
             <button onClick={() => setIsSidebarOpen(false)} className={`p-1.5 rounded-md ${textMuted} hover:bg-red-500/10 hover:text-red-500 transition-colors`}>
@@ -333,7 +338,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
           </div>
           <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
             <FileExplorer files={files} activeFileId={activeFileId} loadingFileId={loadingFileId}
-              onFileSelect={onFileSelect} onFileDelete={onFileDelete} onRepoDelete={onRepoDelete}
+              onFileSelect={handleMobileFileSelect} onFileDelete={onFileDelete} onRepoDelete={onRepoDelete}
               isInRoom={isInRoom} isHost={collab.isHost} sharedFiles={collab.sharedFiles}
               collabFileContents={collabFileContents} onAddToCollab={handleAddToCollab}
               onRemoveFromCollab={handleRemoveFromCollab} onSelectCollabFile={handleSelectCollabFile} />
@@ -574,42 +579,27 @@ export const EditorView: React.FC<EditorViewProps> = ({
               </div>
             </div>
           ) : mobilePane === 'editor' ? (
-            <Group direction="vertical" className="flex-1 relative overflow-hidden">
-              {/* Editor Panel */}
-              <Panel defaultSize="70%" minSize="40%" className="relative overflow-hidden">
-                {isActiveFileShared && collab.provider && collab.status === 'connected' ? (
-                  <CollabMonacoEditor file={activeFile} theme={isDark ? 'dark' : 'light'} fontSize={fontSize}
-                    provider={collab.provider} onChange={(code) => onCodeChange(activeFile.id, code)}
-                    onCursorChange={(ln, col) => setCursorPosition({ ln, col })}
-                    onSelectionChange={(count) => setSelectionCount(count)} />
-                ) : (
-                  <ModernMonacoEditor file={activeFile} theme={isDark ? 'dark' : 'light'} fontSize={fontSize}
-                    onChange={(code) => onCodeChange(activeFile.id, code)}
-                    onCursorChange={(ln, col) => setCursorPosition({ ln, col })}
-                    onSelectionChange={(count) => setSelectionCount(count)} />
-                )}
-              </Panel>
-
-              {/* Horizontal Resize Handle */}
-              <Separator
-                className={`group relative flex items-center justify-center h-[5px] cursor-row-resize select-none transition-all duration-150 ease-out
-                  ${isDark ? 'bg-slate-800/60 hover:bg-emerald-500/40' : 'bg-slate-300/60 hover:bg-emerald-400/40'}`}
-              >
-                <div className={`h-[3px] w-8 rounded-full transition-all duration-200 ease-out
-                  ${isDark ? 'bg-slate-600 group-hover:bg-emerald-400 group-active:bg-emerald-300' : 'bg-slate-400 group-hover:bg-emerald-500 group-active:bg-emerald-600'}
-                  group-hover:w-12 group-active:w-16`}
-                />
-              </Separator>
-
-              {/* Code Runner Panel */}
-              <Panel defaultSize="30%" minSize="20%" maxSize="60%" className="overflow-hidden">
-                <CodeRunner
-                  code={activeFile.content}
-                  language={activeFile.language}
-                  fileName={activeFile.name}
-                />
-              </Panel>
-            </Group>
+            <div className="flex-1 relative overflow-hidden">
+              {collab.status === 'waiting-approval' && (
+                <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center ${isDark ? 'bg-[#1e1e2e]/90' : 'bg-[#eff1f5]/90'} backdrop-blur-sm`}>
+                  <Users size={28} className="text-[#CAA4F7] mb-3" />
+                  <p className={`text-sm font-medium ${textPrimary}`}>Waiting for host approval...</p>
+                  <p className={`text-xs mt-1 ${textMuted}`}>The room host will accept or reject your request.</p>
+                  <button onClick={collab.leaveRoom} className="mt-4 px-4 py-2 rounded-lg bg-red-500/15 text-red-400 text-xs font-bold hover:bg-red-500/25 transition-colors">Cancel</button>
+                </div>
+              )}
+              {isActiveFileShared && collab.provider && collab.status === 'connected' ? (
+                <CollabMonacoEditor file={activeFile} theme={isDark ? 'dark' : 'light'} fontSize={fontSize}
+                  provider={collab.provider} onChange={(code) => onCodeChange(activeFile.id, code)}
+                  onCursorChange={(ln, col) => setCursorPosition({ ln, col })}
+                  onSelectionChange={(count) => setSelectionCount(count)} />
+              ) : (
+                <ModernMonacoEditor file={activeFile} theme={isDark ? 'dark' : 'light'} fontSize={fontSize}
+                  onChange={(code) => onCodeChange(activeFile.id, code)}
+                  onCursorChange={(ln, col) => setCursorPosition({ ln, col })}
+                  onSelectionChange={(count) => setSelectionCount(count)} />
+              )}
+            </div>
           ) : mobilePane === 'runner' ? (
             <div className="flex-1 min-h-0 overflow-hidden">
               {activeFile ? (
@@ -668,7 +658,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
       </div>
 
       {/* ── Status bar ──────────────────────────────────────────────── */}
-      <div className={`h-8 flex items-center justify-between px-2 sm:px-4 text-[10px] sm:text-[12px] kode-font font-black ${isDark ? 'bg-[#181821] text-white/70' : 'bg-[#DBDFE7] text-slate-700'}`}>
+      <div className={`hidden md:flex h-8 items-center justify-between px-2 sm:px-4 text-[10px] sm:text-[12px] kode-font font-black ${isDark ? 'bg-[#181821] text-white/70' : 'bg-[#DBDFE7] text-slate-700'}`}>
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-1.5 h-4">
             <FileCode size={14} className="hidden sm:block" />

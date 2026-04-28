@@ -29,9 +29,35 @@ loader.config({
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // Service worker registration failed, app will work without offline support
-    });
+    let hasRefreshed = false;
+    navigator.serviceWorker.register('/sw.js')
+      .then((registration) => {
+        // Pull latest SW on page load.
+        registration.update().catch(() => {});
+
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+
+        registration.addEventListener('updatefound', () => {
+          const installing = registration.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', () => {
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              installing.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (hasRefreshed) return;
+          hasRefreshed = true;
+          window.location.reload();
+        });
+      })
+      .catch(() => {
+        // Service worker registration failed, app will work without offline support
+      });
   });
 }
 

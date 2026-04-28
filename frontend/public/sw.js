@@ -3,8 +3,8 @@
  * Enables PWA functionality and improves performance.
  */
 
-const CACHE_NAME = 'codecollab-v1';
-const RUNTIME_CACHE = 'codecollab-runtime';
+const CACHE_NAME = 'codecollab-v2';
+const RUNTIME_CACHE = 'codecollab-runtime-v2';
 
 // Assets to cache on install
 const PRECACHE_ASSETS = [
@@ -22,6 +22,12 @@ self.addEventListener('install', (event) => {
     })
   );
   self.skipWaiting();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Activate event - clean up old caches
@@ -47,6 +53,19 @@ self.addEventListener('fetch', (event) => {
 
   // Skip WebSocket connections
   if (event.request.url.includes('ws://') || event.request.url.includes('wss://')) {
+    return;
+  }
+
+  // Never cache API requests
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+
+  // Always prefer network for app shell/navigation to avoid stale UI bundles
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/index.html'))
+    );
     return;
   }
 

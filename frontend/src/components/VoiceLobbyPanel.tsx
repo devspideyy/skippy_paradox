@@ -52,6 +52,11 @@ const VoiceLobbyPanel: React.FC<VoiceLobbyPanelProps> = ({
     [members],
   );
 
+  // Keep voice manager bound to the current room provider, even after local resets.
+  useEffect(() => {
+    voiceManager.setProvider(provider);
+  }, [provider, voiceManager]);
+
   // Block wheel scroll propagation
   useEffect(() => {
     const el = scrollRef.current;
@@ -134,6 +139,7 @@ const VoiceLobbyPanel: React.FC<VoiceLobbyPanelProps> = ({
     setIsJoining(true);
 
     try {
+      voiceManager.setProvider(provider);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       streamRef.current = stream;
 
@@ -177,6 +183,7 @@ const VoiceLobbyPanel: React.FC<VoiceLobbyPanelProps> = ({
 
     stopAudioMonitoring();
     voiceManager.destroy();
+    voiceManager.setProvider(provider);
   }, [provider, stopAudioMonitoring, voiceManager]);
 
   const handleToggleMute = useCallback(() => {

@@ -9,6 +9,7 @@ export class VoiceManager {
   private localStream: MediaStream | null = null;
   private peers: Map<string, RTCPeerConnection> = new Map();
   private remoteAudios: Map<string, HTMLAudioElement> = new Map();
+  private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
   private provider: CollabProvider | null = null;
   private _deafened = false;
 
@@ -44,6 +45,12 @@ export class VoiceManager {
       }
     }
 
+    // Deterministic offerer selection to avoid offer glare:
+    // only one side initiates offer based on peerId ordering.
+    const selfPeerId = this.provider?.peerId || '';
+    const shouldInitiateOffer = Boolean(selfPeerId) && selfPeerId > remotePeerId;
+    if (!shouldInitiateOffer) return;
+
     pc.createOffer()
       .then((offer) => pc.setLocalDescription(offer))
       .then(() => {
@@ -68,6 +75,7 @@ export class VoiceManager {
     }
 
     await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    await this._flushPendingCandidates(fromPeerId, pc);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
@@ -80,14 +88,24 @@ export class VoiceManager {
     const pc = this.peers.get(fromPeerId);
     if (!pc) return;
     await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    await this._flushPendingCandidates(fromPeerId, pc);
   }
 
   async handleIceCandidate(fromPeerId: string, candidate: RTCIceCandidateInit) {
     const pc = this.peers.get(fromPeerId);
-    if (!pc) return;
+    if (!pc || !pc.remoteDescription) {
+      const queue = this.pendingCandidates.get(fromPeerId) || [];
+      queue.push(candidate);
+      this.pendingCandidates.set(fromPeerId, queue);
+      return;
+    }
     try {
       await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch { /* candidate may arrive before remote description */ }
+    } catch {
+      const queue = this.pendingCandidates.get(fromPeerId) || [];
+      queue.push(candidate);
+      this.pendingCandidates.set(fromPeerId, queue);
+    }
   }
 
   removePeer(peerId: string) {
@@ -96,6 +114,7 @@ export class VoiceManager {
       pc.close();
       this.peers.delete(peerId);
     }
+    this.pendingCandidates.delete(peerId);
 
     const audio = this.remoteAudios.get(peerId);
     if (audio) {
@@ -125,8 +144,23 @@ export class VoiceManager {
     }
     this.peers.clear();
     this.remoteAudios.clear();
+    this.pendingCandidates.clear();
     this.localStream = null;
     this.provider = null;
+  }
+
+  private async _flushPendingCandidates(peerId: string, pc: RTCPeerConnection) {
+    const queue = this.pendingCandidates.get(peerId);
+    if (!queue || queue.length === 0 || !pc.remoteDescription) return;
+
+    for (const candidate of queue) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch {
+        // Ignore invalid/stale candidates and continue.
+      }
+    }
+    this.pendingCandidates.delete(peerId);
   }
 
   private _createPeerConnection(remotePeerId: string): RTCPeerConnection {

@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Send, Sparkles, Loader2, Trash2,
-  RotateCcw, Plus, ChevronDown, Square, X,
+  RotateCcw, Plus, ChevronDown, Square, X, Bot, CheckCircle2, Wrench,
 } from 'lucide-react';
 import { marked } from 'marked';
 import { useTheme } from '../hooks/useTheme';
 import { StoredFile } from '../services/storageService';
 import { geminiKeyRotation } from '../services/geminiKeyRotation';
+import { runAgentLoop, AgentStep } from '../services/agentService';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -16,6 +17,7 @@ interface Message {
   content: string;
   loading?: boolean;
   timestamp: number;
+  steps?: AgentStep[];
 }
 
 interface Conversation {
@@ -28,11 +30,17 @@ interface Conversation {
 
 interface GeminiPanelProps {
   activeFile: StoredFile | null;
+  onCodeChange?: (fileId: string, content: string) => void;
+  onFileCreate?: () => void;
 }
 
 /* ── Constants ─────────────────────────────────────────────────────── */
 
 const GEMINI_API_KEY_STORAGE = 'gemini-api-key';
+const OPENROUTER_API_KEY_STORAGE = 'openrouter-api-key';
+const PROVIDER_STORAGE = 'agent-provider-choice';
+const MODEL_STORAGE = 'agent-model-choice';
+const AGENT_MODE_STORAGE = 'agent-autonomous-mode';
 const CONVERSATIONS_STORAGE = 'gemini-conversations';
 const ACTIVE_CONV_STORAGE = 'gemini-active-conv';
 const MAX_HISTORY_MESSAGES = 10;
@@ -40,10 +48,10 @@ const MAX_FILE_CONTEXT_CHARS = 12000;
 const MAX_CONVERSATIONS = 20;
 
 const QUICK_ACTIONS = [
-  { label: 'Explain', prompt: 'Explain what this code does in plain English.' },
-  { label: 'Fix bugs', prompt: 'Find and fix any bugs or issues in this code.' },
-  { label: 'Optimize', prompt: 'Suggest performance optimizations for this code.' },
-  { label: 'Add types', prompt: 'Add proper TypeScript types to this code.' },
+  { label: 'Fix bugs', prompt: 'Inspect all workspace files, find and fix bugs, and execute to verify.' },
+  { label: 'Add unit tests', prompt: 'Create unit tests for the current code in a new file and execute them.' },
+  { label: 'Optimize', prompt: 'Analyze performance, refactor for efficiency, and test the output.' },
+  { label: 'Agent plan', prompt: 'List all files, summarize current architecture, and plan next features.' },
 ];
 
 /* ── Configure marked ──────────────────────────────────────────────── */
@@ -146,28 +154,63 @@ function MessageBubble({ msg, isStreaming }: { msg: Message; isStreaming?: boole
   const isUser = msg.role === 'user';
 
   return (
-    <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+    <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} mb-3`}>
       {!isUser && (
-        <div className="flex items-center gap-1.5 mb-0.5 mx-1">
-          <div className="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <Sparkles size={7} className="text-white" />
+        <div className="flex items-center gap-1.5 mb-1 mx-1">
+          <div className="w-4 h-4 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-sm">
+            <Bot size={9} className="text-white" />
           </div>
-          <span className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>AI</span>
+          <span className={`text-[10px] font-bold ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>Skiff Agent</span>
         </div>
       )}
+
+      {/* Agent Tool Execution Steps */}
+      {!isUser && msg.steps && msg.steps.length > 0 && (
+        <div className="w-full max-w-[95%] mb-2 space-y-1">
+          {msg.steps.map((st) => (
+            <div
+              key={st.id}
+              className={`text-[10px] px-2.5 py-1.5 rounded-md border flex items-center justify-between font-mono ${
+                st.status === 'running'
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                  : st.status === 'failed'
+                  ? 'bg-red-500/10 border-red-500/30 text-red-300'
+                  : isDark
+                  ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-400'
+                  : 'bg-emerald-50 border-emerald-300 text-emerald-700'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 truncate">
+                {st.status === 'running' ? (
+                  <Loader2 size={11} className="animate-spin text-amber-400 shrink-0" />
+                ) : st.status === 'failed' ? (
+                  <X size={11} className="text-red-400 shrink-0" />
+                ) : (
+                  <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
+                )}
+                <span className="truncate">{st.title}</span>
+              </div>
+              <span className="text-[9px] opacity-60 ml-2">
+                {st.type === 'tool_call' ? 'tool' : st.type === 'tool_result' ? 'success' : 'done'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div
-        className={`px-2.5 py-1.5 rounded-lg text-[12px] max-w-[92%] leading-relaxed overflow-hidden ${
+        className={`px-3 py-2 rounded-lg text-[12px] max-w-[92%] leading-relaxed overflow-hidden ${
           isUser
-            ? 'bg-[#CAA4F7] text-[#1E1E2A] rounded-tr-sm'
+            ? 'bg-[#CAA4F7] text-[#1E1E2A] rounded-tr-sm font-medium'
             : isDark
-              ? 'bg-[#232340] text-slate-200 rounded-tl-sm'
-              : 'bg-white text-slate-800 border border-slate-200/60 rounded-tl-sm'
+              ? 'bg-[#232340] text-slate-200 rounded-tl-sm border border-slate-700/50 shadow-sm'
+              : 'bg-white text-slate-800 border border-slate-200/60 rounded-tl-sm shadow-sm'
         }`}
       >
         {msg.loading && !msg.content ? (
           <div className="flex items-center gap-2">
             <Loader2 size={12} className="animate-spin text-purple-400" />
-            <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Thinking...</span>
+            <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Agent inspecting files & executing tools...</span>
           </div>
         ) : isUser ? (
           <span className="whitespace-pre-wrap">{msg.content}</span>
@@ -297,8 +340,47 @@ function ConversationDropdown({
 
 /* ── Main panel ────────────────────────────────────────────────────── */
 
-export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
+export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, onCodeChange, onFileCreate }) => {
   const { isDark } = useTheme();
+
+  // Agent Harness & Provider state
+  const [provider, setProvider] = useState<'gemini' | 'openrouter'>(() => {
+    return 'openrouter';
+  });
+  const [model, setModel] = useState<string>(() => {
+    const saved = localStorage.getItem(MODEL_STORAGE);
+    if (!saved || saved.toLowerCase().includes('claude') || saved.toLowerCase().includes('sonnet') || saved.toLowerCase().includes('gpt-4')) {
+      localStorage.setItem(MODEL_STORAGE, 'nvidia/nemotron-3.5-lightning:free');
+      return 'nvidia/nemotron-3.5-lightning:free';
+    }
+    return saved;
+  });
+  const [isAgentHarness, setIsAgentHarness] = useState<boolean>(() => {
+    return localStorage.getItem(AGENT_MODE_STORAGE) !== 'false';
+  });
+  const [openRouterKey, setOpenRouterKey] = useState<string>(() => {
+    const key = localStorage.getItem(OPENROUTER_API_KEY_STORAGE);
+    const envKey = (import.meta as any).env?.VITE_OPENROUTER_API_KEY || '';
+    if (key && key.startsWith('sk-or-')) return key;
+    if (envKey) {
+      localStorage.setItem(OPENROUTER_API_KEY_STORAGE, envKey);
+      return envKey;
+    }
+    return '';
+  });
+  const [geminiCustomKey, setGeminiCustomKey] = useState<string>(() => {
+    return localStorage.getItem(GEMINI_API_KEY_STORAGE) || '';
+  });
+  const [showConfigModal, setShowConfigModal] = useState(false);
+
+  useEffect(() => {
+    // Sanitize any stale or paid models if on OpenRouter
+    const savedModel = localStorage.getItem(MODEL_STORAGE);
+    if (!savedModel || savedModel.toLowerCase().includes('claude') || savedModel.toLowerCase().includes('sonnet') || savedModel.toLowerCase().includes('gpt-4')) {
+      setModel('nvidia/nemotron-3.5-lightning:free');
+      localStorage.setItem(MODEL_STORAGE, 'nvidia/nemotron-3.5-lightning:free');
+    }
+  }, []);
 
   // Conversation state
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
@@ -315,6 +397,32 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const streamingMsgId = useRef<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(PROVIDER_STORAGE, provider);
+  }, [provider]);
+
+  useEffect(() => {
+    localStorage.setItem(MODEL_STORAGE, model);
+  }, [model]);
+
+  useEffect(() => {
+    localStorage.setItem(AGENT_MODE_STORAGE, String(isAgentHarness));
+  }, [isAgentHarness]);
+
+  useEffect(() => {
+    if (openRouterKey) localStorage.setItem(OPENROUTER_API_KEY_STORAGE, openRouterKey);
+    else localStorage.removeItem(OPENROUTER_API_KEY_STORAGE);
+  }, [openRouterKey]);
+
+  useEffect(() => {
+    if (geminiCustomKey) {
+      localStorage.setItem(GEMINI_API_KEY_STORAGE, geminiCustomKey);
+      geminiKeyRotation.setCustomKey(geminiCustomKey);
+    } else {
+      localStorage.removeItem(GEMINI_API_KEY_STORAGE);
+    }
+  }, [geminiCustomKey]);
 
   /* ── Initialize conversation ───────────────────────────────────── */
 
@@ -409,11 +517,18 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
   const sendMessage = useCallback(async (userText: string) => {
     if (!userText.trim() || isLoading) return;
 
-    if (!localStorage.getItem(GEMINI_API_KEY_STORAGE) && !geminiKeyRotation.hasAvailableQuota()) {
+    const effectiveKey = provider === 'openrouter'
+      ? (openRouterKey || localStorage.getItem(OPENROUTER_API_KEY_STORAGE))
+      : (localStorage.getItem(GEMINI_API_KEY_STORAGE) || geminiKeyRotation.getCurrentKey());
+
+    if (!effectiveKey) {
+      setShowConfigModal(true);
       const errMsg: Message = {
         id: newId(),
         role: 'assistant',
-        content: 'Daily free-tier quota reached for this browser. Please try again tomorrow or use your own API key.',
+        content: provider === 'openrouter'
+          ? '🔑 Please paste your OpenRouter API key in the configuration drawer above to start.'
+          : '🔑 Please paste your Gemini API key in the configuration drawer above to start.',
         timestamp: Date.now(),
       };
       const next = [...messages, errMsg];
@@ -421,38 +536,23 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
       persistConversation(next);
       return;
     }
-
-    const currentKey = localStorage.getItem(GEMINI_API_KEY_STORAGE) || geminiKeyRotation.getCurrentKey();
-    if (!currentKey) {
-      const quotaMsg = localStorage.getItem(GEMINI_API_KEY_STORAGE)
-        ? 'No Gemini API key found. Add a key in settings to start chatting.'
-        : (geminiKeyRotation.hasKeys()
-          ? 'No free-tier key currently available (quota exhausted). Try again tomorrow or use your own API key.'
-          : 'No Gemini API key found. Add a key in settings to start chatting.');
-      const errMsg: Message = {
-        id: newId(), role: 'assistant',
-        content: quotaMsg,
-        timestamp: Date.now(),
-      };
-      const next = [...messages, errMsg];
-      setMessages(next);
-      persistConversation(next);
-      return;
-    }
-
-    const requestContents = buildContents(userText);
 
     const userMsg: Message = { id: newId(), role: 'user', content: userText, timestamp: Date.now() };
-    const assistantMsg: Message = { id: newId(), role: 'assistant', content: '', loading: true, timestamp: Date.now() };
+    const assistantMsg: Message = {
+      id: newId(),
+      role: 'assistant',
+      content: '',
+      loading: true,
+      timestamp: Date.now(),
+      steps: [],
+    };
 
     streamingMsgId.current = assistantMsg.id;
-
     const withUserMsg = [...messages, userMsg, assistantMsg];
     setMessages(withUserMsg);
     setInput('');
     setIsLoading(true);
 
-    // Auto-name conversation on first user message
     if (activeConvId) {
       setConversations((prev) => {
         const conv = prev.find((c) => c.id === activeConvId);
@@ -469,11 +569,79 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // ── Autonomous Agent Harness Execution ──
+    if (isAgentHarness) {
+      try {
+        const finalAnswer = await runAgentLoop({
+          prompt: userText,
+          apiKey: effectiveKey,
+          provider,
+          model,
+          signal: controller.signal,
+          callbacks: {
+            onStep: (step) => {
+              setMessages((prev) =>
+                prev.map((m) => {
+                  if (m.id !== assistantMsg.id) return m;
+                  const currentSteps = m.steps || [];
+                  const existingIdx = currentSteps.findIndex((s) => s.id === step.id);
+                  let newSteps = [...currentSteps];
+                  if (existingIdx >= 0) {
+                    newSteps[existingIdx] = step;
+                  } else {
+                    newSteps.push(step);
+                  }
+                  return { ...m, steps: newSteps };
+                })
+              );
+            },
+            onUpdateFile: (fileId, content) => {
+              if (onCodeChange) onCodeChange(fileId, content);
+            },
+            onCreateFile: () => {
+              if (onFileCreate) onFileCreate();
+            },
+          },
+        });
+
+        if (provider === 'gemini' && !localStorage.getItem(GEMINI_API_KEY_STORAGE)) {
+          geminiKeyRotation.recordUsage();
+          setKeyStats(geminiKeyRotation.getUsageStats());
+        }
+
+        setMessages((prev) => {
+          const final = prev.map((m) =>
+            m.id === assistantMsg.id
+              ? { ...m, content: finalAnswer, loading: false }
+              : m
+          );
+          persistConversation(final);
+          return final;
+        });
+      } catch (err: any) {
+        setMessages((prev) => {
+          const final = prev.map((m) =>
+            m.id === assistantMsg.id
+              ? { ...m, content: `Agent error: ${err.message}`, loading: false }
+              : m
+          );
+          persistConversation(final);
+          return final;
+        });
+      } finally {
+        setIsLoading(false);
+        streamingMsgId.current = null;
+        abortRef.current = null;
+      }
+      return;
+    }
+
+    const requestContents = buildContents(userText);
     let accumulated = '';
 
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${currentKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${effectiveKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -636,15 +804,25 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
       <div className={`flex flex-col px-3 py-2.5 border-b ${border} shrink-0`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <Sparkles size={8} className="text-white" />
+            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-sm">
+              <Bot size={9} className="text-white" />
             </div>
-            <span className={`text-[11px] font-bold uppercase tracking-wider ${textMuted}`}>AI Assistant</span>
-            {activeFile && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-200 text-slate-500'} truncate max-w-[80px]`}>
-                {activeFile.name}
-              </span>
-            )}
+            <span className={`text-[11px] font-bold uppercase tracking-wider ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>
+              Skiff Agent
+            </span>
+
+            {/* Autonomous Mode Toggle */}
+            <button
+              onClick={() => setIsAgentHarness(!isAgentHarness)}
+              className={`text-[9px] px-2 py-0.5 rounded-full font-bold transition-all ${
+                isAgentHarness
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                  : isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-200 text-slate-600'
+              }`}
+              title="Toggle Autonomous Tool Calling Loop"
+            >
+              {isAgentHarness ? '⚡ Autonomous' : '💬 Chat Only'}
+            </button>
           </div>
           <div className="flex items-center gap-1">
             <ConversationDropdown
@@ -655,6 +833,13 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
               onDelete={deleteConversation}
               isDark={isDark}
             />
+            <button
+              onClick={() => setShowConfigModal(!showConfigModal)}
+              className={`p-1 rounded-md ${textMuted} hover:text-purple-400 hover:bg-purple-500/10 transition-colors`}
+              title="Agent & Model Settings"
+            >
+              <Wrench size={12} />
+            </button>
             {messages.length > 0 && (
               <button
                 onClick={clearMessages}
@@ -667,14 +852,44 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
           </div>
         </div>
 
-        {/* Model + key stats */}
-        <div className="flex items-center gap-2 mt-1.5">
-          <div className={`flex items-center gap-1 text-[9px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-mono">gemini-2.0-flash</span>
+        {/* Model + Provider + key stats */}
+        <div className="flex items-center justify-between gap-2 mt-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${isDark ? 'bg-purple-950/50 border border-purple-500/40 text-purple-300' : 'bg-purple-100 text-purple-800'}`}>
+              {provider.toUpperCase()}
+            </span>
+            {provider === 'openrouter' ? (
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className={`text-[9px] font-mono px-1.5 py-0.5 rounded border truncate cursor-pointer ${
+                  isDark ? 'bg-[#181828] border-slate-700 text-purple-300' : 'bg-white border-slate-200 text-purple-700'
+                } focus:outline-none focus:ring-1 focus:ring-purple-500`}
+                title="Select OpenRouter Model"
+              >
+                <option value="nvidia/nemotron-3.5-lightning:free">⚡ Nemotron 3.5 Lightning (Free)</option>
+                <option value="meta-llama/llama-3.3-70b-instruct:free">🦙 Llama 3.3 70B (Free)</option>
+                <option value="qwen/qwen-2.5-coder-32b-instruct:free">💻 Qwen 2.5 Coder (Free)</option>
+                <option value="google/gemini-2.0-flash-exp:free">✨ Gemini 2.0 Flash Exp (Free)</option>
+                <option value="deepseek/deepseek-r1:free">🧠 DeepSeek R1 (Free)</option>
+              </select>
+            ) : (
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className={`text-[9px] font-mono px-1.5 py-0.5 rounded border truncate cursor-pointer ${
+                  isDark ? 'bg-[#181828] border-slate-700 text-purple-300' : 'bg-white border-slate-200 text-purple-700'
+                } focus:outline-none focus:ring-1 focus:ring-purple-500`}
+                title="Select Gemini Model"
+              >
+                <option value="gemini-2.0-flash">⚡ Gemini 2.0 Flash</option>
+                <option value="gemini-1.5-pro">🧠 Gemini 1.5 Pro</option>
+                <option value="gemini-2.5-pro-exp">🚀 Gemini 2.5 Pro Exp</option>
+              </select>
+            )}
           </div>
 
-          {!localStorage.getItem(GEMINI_API_KEY_STORAGE) && geminiKeyRotation.hasKeys() && (
+          {!localStorage.getItem(GEMINI_API_KEY_STORAGE) && provider === 'gemini' && geminiKeyRotation.hasKeys() && (
             <div className="flex items-center gap-1">
               {keyStats.map((stat) => (
                 <span
@@ -698,6 +913,103 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
             </div>
           )}
         </div>
+
+        {/* Config Modal Inline Drawer */}
+        {showConfigModal && (
+          <div className={`mt-2 p-2.5 rounded-lg border text-[11px] space-y-2 ${isDark ? 'bg-[#1a1a2e] border-slate-700' : 'bg-white border-slate-300'}`}>
+            <div className="font-semibold text-purple-400">Agent Configuration</div>
+            <div className="flex gap-2">
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="radio"
+                  name="provider"
+                  checked={provider === 'gemini'}
+                  onChange={() => { setProvider('gemini'); setModel('gemini-2.0-flash'); }}
+                />
+                Gemini
+              </label>
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="radio"
+                  name="provider"
+                  checked={provider === 'openrouter'}
+                  onChange={() => { setProvider('openrouter'); setModel('nvidia/nemotron-3.5-lightning:free'); }}
+                />
+                OpenRouter
+              </label>
+            </div>
+
+            {provider === 'openrouter' && (
+              <div className="space-y-1.5">
+                <input
+                  type="password"
+                  placeholder="Paste OpenRouter API Key"
+                  value={openRouterKey}
+                  onChange={(e) => setOpenRouterKey(e.target.value)}
+                  className={`w-full px-2 py-1 rounded border text-[10px] ${inputBg} ${textPrimary}`}
+                />
+                <input
+                  type="text"
+                  placeholder="Model name"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className={`w-full px-2 py-1 rounded border text-[10px] ${inputBg} ${textPrimary}`}
+                />
+                <div className="flex gap-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setModel('nvidia/nemotron-3.5-lightning:free')}
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-mono border ${model === 'nvidia/nemotron-3.5-lightning:free' ? 'bg-purple-600 text-white' : 'bg-slate-700/40 text-slate-300'}`}
+                  >
+                    Nemotron 3.5 Lightning (Free)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModel('nvidia/nemotron-3-ultra-550b-a55b:free')}
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-mono border ${model === 'nvidia/nemotron-3-ultra-550b-a55b:free' ? 'bg-purple-600 text-white' : 'bg-slate-700/40 text-slate-300'}`}
+                  >
+                    Nemotron 3 Ultra (Free)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModel('nvidia/nemotron-3-super-120b-a12b:free')}
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-mono border ${model === 'nvidia/nemotron-3-super-120b-a12b:free' ? 'bg-purple-600 text-white' : 'bg-slate-700/40 text-slate-300'}`}
+                  >
+                    Nemotron 3 Super (Free)
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {provider === 'gemini' && (
+              <div className="space-y-1.5">
+                <input
+                  type="password"
+                  placeholder="Paste Gemini API Key (Pro account key)"
+                  value={geminiCustomKey}
+                  onChange={(e) => setGeminiCustomKey(e.target.value)}
+                  className={`w-full px-2 py-1 rounded border text-[10px] ${inputBg} ${textPrimary}`}
+                />
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className={`w-full px-2 py-1 rounded border text-[10px] ${inputBg} ${textPrimary}`}
+                >
+                  <option value="gemini-2.0-flash">gemini-2.0-flash (Fast & Accurate)</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro (Deep Reasoning)</option>
+                  <option value="gemini-2.5-pro-exp">gemini-2.5-pro-exp (Top Coding)</option>
+                </select>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowConfigModal(false)}
+              className="w-full py-1 rounded bg-purple-600 text-white font-medium text-[10px]"
+            >
+              Done
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Quick actions — only when empty */}

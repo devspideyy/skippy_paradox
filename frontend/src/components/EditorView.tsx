@@ -488,7 +488,11 @@ export const EditorView: React.FC<EditorViewProps> = ({
             <>
               <ResizeHandle isDark={isDark} />
               <Panel defaultSize="26%" minSize="18%" maxSize="45%" className="flex flex-col min-w-0">
-                <GeminiPanel activeFile={activeFile} />
+                <GeminiPanel
+                  activeFile={activeFile}
+                  onCodeChange={(fileId, content) => onCodeChange(fileId, content)}
+                  onFileCreate={onFileCreate}
+                />
               </Panel>
             </>
           )}
@@ -648,7 +652,11 @@ export const EditorView: React.FC<EditorViewProps> = ({
             </div>
           ) : mobilePane === 'gemini' ? (
             <div className="flex-1 min-h-0 overflow-hidden">
-              <GeminiPanel activeFile={activeFile} />
+              <GeminiPanel
+                activeFile={activeFile}
+                onCodeChange={(fileId, content) => onCodeChange(fileId, content)}
+                onFileCreate={onFileCreate}
+              />
             </div>
           ) : mobilePane === 'chat' ? (
             <div className="flex-1 min-h-0 overflow-hidden">

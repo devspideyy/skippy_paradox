@@ -1,7 +1,8 @@
 # 📚 CodeCollab - Complete Documentation
 
+**Team**: Team Ascension  
+**Track**: Open Innovation  
 **Version**: 2.0.0  
-**Last Updated**: April 27, 2026  
 **Status**: ✅ Production Ready
 
 ---
@@ -25,9 +26,7 @@
 
 # Platform Overview
 
-**CodeCollab** is a real-time collaborative code editor built for teams. It's a browser-based collaborative coding platform that allows multiple developers to write, edit, and review code together in real time.
-
-Live instance: [codecollab.noharafamily.xyz](https://codecollab.noharafamily.xyz)
+**CodeCollab** by **Team Ascension** (**Open Innovation**) is a real-time collaborative code editor built for teams. It's a browser-based collaborative coding platform that allows multiple developers to write, edit, and review code together in real time.
 
 ## Core Principles
 

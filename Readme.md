@@ -1,10 +1,8 @@
-# CodeCollab
+# CodeCollab — Team Ascension
 
-**Real-time collaborative code editor built for teams.**
+**Real-time collaborative code editor built for teams | Open Innovation**
 
-CodeCollab is a browser-based collaborative coding platform that allows multiple developers to write, edit, and review code together in real time. It pairs a feature-rich Monaco editor frontend with a purpose-built WebSocket collaboration server, delivering sub-second synchronization with conflict-free concurrent editing powered by Yjs CRDTs.
-
-Live instance: [codecollab.noharafamily.xyz](https://codecollab.noharafamily.xyz)
+CodeCollab is a browser-based collaborative coding platform developed by **Team Ascension** under the **Open Innovation** track. It allows multiple developers to write, edit, and review code together in real time. It pairs a feature-rich Monaco editor frontend with a purpose-built WebSocket collaboration server, delivering sub-second synchronization with conflict-free concurrent editing powered by Yjs CRDTs.
 
 ---
 
@@ -17,9 +15,8 @@ Live instance: [codecollab.noharafamily.xyz](https://codecollab.noharafamily.xyz
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
-- [Contributing](#contributing)
-- [License](#license)
-- [Team](#team)
+- [Open Innovation & Team](#open-innovation--team)
+
 
 ---
 
@@ -158,7 +155,7 @@ All concurrent edits are resolved using Yjs CRDTs (Conflict-free Replicated Data
 ## Project Structure
 
 ```
-Nohara_Famliy_PS-11/
+Skiffy/
 |
 +-- frontend/                    React + Vite application
 |   +-- src/
@@ -209,8 +206,8 @@ Nohara_Famliy_PS-11/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/monojitgoswami69/Nohara_Famliy_PS-11.git
-cd Nohara_Famliy_PS-11
+git clone https://github.com/Arnab-apk/Skiffy.git
+cd Skiffy
 ```
 
 ### 2. Start the REST Backend
@@ -275,3 +272,12 @@ The development server starts on `http://localhost:3000` (or the next available 
 | `PORT` | WebSocket server listen port | `4000` |
 
 ---
+
+## Open Innovation & Team
+
+- **Team**: Team Ascension
+- **Track**: Open Innovation
+- **Project**: CodeCollab / Skiffy
+
+*Built with passion for seamless, real-time collaboration.*
+

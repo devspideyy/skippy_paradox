@@ -679,6 +679,17 @@ function handleDocConnection(ws, roomId, fileId) {
 // ─── HTTP Server + WebSocket Routing ───────────────────────────────────
 
 const server = http.createServer((req, res) => {
+  // CORS Headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   // Simple health check
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -689,6 +700,103 @@ const server = http.createServer((req, res) => {
     }));
     return;
   }
+
+  // Direct Code Execution Endpoint
+  if (req.url === '/execute' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { source_code, language, stdin } = JSON.parse(body || '{}');
+        const lang = (language || 'javascript').toLowerCase();
+        const startTime = Date.now();
+
+        // 1. Python Execution
+        if (lang === 'python' || lang === 'py') {
+          const { spawn } = await import('node:child_process');
+          const py = spawn('python', ['-c', source_code]);
+          let stdout = '';
+          let stderr = '';
+
+          if (stdin) {
+            py.stdin.write(stdin);
+            py.stdin.end();
+          }
+
+          py.stdout.on('data', data => { stdout += data.toString(); });
+          py.stderr.on('data', data => { stderr += data.toString(); });
+
+          py.on('close', code => {
+            const time = ((Date.now() - startTime) / 1000).toFixed(3) + 's';
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              stdout: stdout || null,
+              stderr: stderr || null,
+              compile_output: null,
+              message: null,
+              status: { id: code === 0 ? 3 : 4, description: code === 0 ? 'Accepted' : 'Error' },
+              time,
+              memory: 1024,
+            }));
+          });
+
+          py.on('error', err => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              stdout: null,
+              stderr: `Execution error: ${err.message}`,
+              status: { id: 4, description: 'Error' },
+              time: '0.0s',
+            }));
+          });
+          return;
+        }
+
+        // 2. JavaScript / Node execution
+        const { spawn } = await import('node:child_process');
+        const node = spawn('node', ['-e', source_code]);
+        let stdout = '';
+        let stderr = '';
+
+        if (stdin) {
+          node.stdin.write(stdin);
+          node.stdin.end();
+        }
+
+        node.stdout.on('data', data => { stdout += data.toString(); });
+        node.stderr.on('data', data => { stderr += data.toString(); });
+
+        node.on('close', code => {
+          const time = ((Date.now() - startTime) / 1000).toFixed(3) + 's';
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            stdout: stdout || null,
+            stderr: stderr || null,
+            compile_output: null,
+            message: null,
+            status: { id: code === 0 ? 3 : 4, description: code === 0 ? 'Accepted' : 'Error' },
+            time,
+            memory: 1024,
+          }));
+        });
+
+        node.on('error', err => {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            stdout: null,
+            stderr: `Execution error: ${err.message}`,
+            status: { id: 4, description: 'Error' },
+            time: '0.0s',
+          }));
+        });
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404);
   res.end();
 });

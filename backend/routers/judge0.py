@@ -417,6 +417,81 @@ async def execute_code(request: CodeExecutionRequest):
         headers["X-RapidAPI-Key"] = JUDGE0_API_KEY
         headers["X-RapidAPI-Host"] = JUDGE0_API_HOST
 
+    # If no Judge0 key is configured or URL is default rapidapi, use local subprocess execution
+    if not JUDGE0_API_KEY:
+        import subprocess
+        import tempfile
+        import time
+
+        lang = request.language.lower()
+        start_time = time.time()
+        
+        try:
+            if lang in ["javascript", "js", "typescript", "ts"]:
+                # Execute with node
+                with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as tf:
+                    tf.write(request.source_code)
+                    temp_path = tf.name
+                
+                proc = subprocess.run(
+                    ["node", temp_path],
+                    input=request.stdin or "",
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+                os.remove(temp_path)
+                elapsed = f"{time.time() - start_time:.3f}s"
+                
+                return CodeExecutionResponse(
+                    stdout=proc.stdout or None,
+                    stderr=proc.stderr or None,
+                    compile_output=None,
+                    message=None,
+                    status={"id": 3 if proc.returncode == 0 else 4, "description": "Accepted" if proc.returncode == 0 else "Error"},
+                    time=elapsed,
+                    memory=1024,
+                )
+
+            elif lang in ["python", "py"]:
+                # Execute with python
+                with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as tf:
+                    tf.write(request.source_code)
+                    temp_path = tf.name
+
+                proc = subprocess.run(
+                    ["python", temp_path],
+                    input=request.stdin or "",
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+                os.remove(temp_path)
+                elapsed = f"{time.time() - start_time:.3f}s"
+
+                return CodeExecutionResponse(
+                    stdout=proc.stdout or None,
+                    stderr=proc.stderr or None,
+                    compile_output=None,
+                    message=None,
+                    status={"id": 3 if proc.returncode == 0 else 4, "description": "Accepted" if proc.returncode == 0 else "Error"},
+                    time=elapsed,
+                    memory=1024,
+                )
+        except subprocess.TimeoutExpired:
+            return CodeExecutionResponse(
+                stdout=None,
+                stderr="Execution timed out after 15s",
+                compile_output=None,
+                message="Time Limit Exceeded",
+                status={"id": 5, "description": "Time Limit Exceeded"},
+                time="15.0s",
+                memory=0,
+            )
+        except Exception as local_err:
+            # Fall through to try HTTP if local fails
+            pass
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -438,14 +513,42 @@ async def execute_code(request: CodeExecutionRequest):
             )
 
     except Exception as e:
-        # Fallback to local execution if Judge0 fails
-        local_res = _run_local_process(request.source_code, lang, request.stdin or "")
-        if local_res is not None:
-            return local_res
-        raise HTTPException(
-            status_code=500,
-            detail=f"Execution failed: {str(e)}. Tip: Set JUDGE0_API_KEY in backend environment for cloud compiler support."
-        )
+        # Final fallback: execute locally with python or node
+        try:
+            import subprocess
+            import tempfile
+            import time
+
+            lang = request.language.lower()
+            start_time = time.time()
+            cmd = ["node"] if lang in ["javascript", "js", "typescript", "ts"] else ["python"]
+            suffix = ".js" if lang in ["javascript", "js", "typescript", "ts"] else ".py"
+            
+            with tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False, encoding="utf-8") as tf:
+                tf.write(request.source_code)
+                temp_path = tf.name
+
+            proc = subprocess.run(
+                [*cmd, temp_path],
+                input=request.stdin or "",
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
+            os.remove(temp_path)
+            elapsed = f"{time.time() - start_time:.3f}s"
+
+            return CodeExecutionResponse(
+                stdout=proc.stdout or None,
+                stderr=proc.stderr or None,
+                compile_output=None,
+                message=None,
+                status={"id": 3 if proc.returncode == 0 else 4, "description": "Accepted" if proc.returncode == 0 else "Error"},
+                time=elapsed,
+                memory=1024,
+            )
+        except Exception as fallback_err:
+            raise HTTPException(status_code=500, detail=f"Execution failed: {str(e)} | Local: {str(fallback_err)}")
 
 
 @router.get("/languages")

@@ -131,7 +131,11 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({
     setCurrentRunningCmd(command);
 
     try {
-      const judge0Lang = mapMonacoLanguageToJudge0(activeLang);
+      let effectiveLang = activeLang;
+      if (/^\s*(def |import |from |print\(|class .*?:|if __name__)/m.test(code) && !/console\.log|const |let |var |function /m.test(code)) {
+        effectiveLang = 'Python';
+      }
+      const judge0Lang = mapMonacoLanguageToJudge0(effectiveLang);
       const executionResult = await executeCode({
         source_code: code,
         language: judge0Lang,
@@ -249,7 +253,6 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800/40 text-slate-400 hidden sm:inline-block truncate max-w-[130px]">
             {fileName || 'script'}
           </span>
-
           {/* Language Selector Dropdown */}
           <div className="relative flex items-center">
             <select

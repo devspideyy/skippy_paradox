@@ -4,8 +4,9 @@ import { SharedFileInfo } from '../services/collabService';
 import { useTheme } from '../hooks/useTheme';
 import {
   FileCode, FolderOpen, FolderClosed, ChevronRight, ChevronDown,
-  Trash2, Loader2, Package, Users, Plus, Minus, Folder
+  Trash2, Loader2, Package, Users, Plus, Minus, Folder, Check, X
 } from 'lucide-react';
+import { detectLanguage } from '../utils/detectLanguage';
 import {
   JavaScript, TypeScript, Python, CPlusPlus, C, Java, Go, RustDark, Ruby, PHP
 } from 'developer-icons';
@@ -262,6 +263,8 @@ interface FileExplorerProps {
   onFileSelect: (id: string) => void;
   onFileDelete: (id: string) => void;
   onRepoDelete?: (repoKey: string) => void;
+  onFileCreate?: (name?: string, content?: string, language?: string) => void;
+  triggerNewFile?: number;
   // Collab
   isInRoom: boolean;
   isHost: boolean;
@@ -277,6 +280,7 @@ interface FileExplorerProps {
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({
   files, activeFileId, loadingFileId, onFileSelect, onFileDelete, onRepoDelete,
+  onFileCreate, triggerNewFile,
   isInRoom, isHost, sharedFiles, collabFileContents,
   onAddToCollab, onRemoveFromCollab, onSelectCollabFile, onReorderCollabFiles,
 }) => {
@@ -284,6 +288,33 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   
+  // Inline File Creation State
+  const [isCreating, setIsCreating] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (triggerNewFile && triggerNewFile > 0) {
+      setIsCreating(true);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [triggerNewFile]);
+
+  const previewLang = useMemo(() => {
+    return newFileName.trim() ? detectLanguage(newFileName.trim(), '') : '';
+  }, [newFileName]);
+
+  const handleCommitNewFile = () => {
+    const name = newFileName.trim();
+    if (!name) return;
+    const lang = detectLanguage(name, '');
+    if (onFileCreate) {
+      onFileCreate(name, '', lang);
+    }
+    setIsCreating(false);
+    setNewFileName('');
+  };
+
   // DND State
   const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -457,9 +488,21 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           <span className="text-[11px] font-bold tracking-wide uppercase">
             My Files
           </span>
-          <span className={`text-[10px] ml-auto font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            {localFiles.length} file{localFiles.length !== 1 ? 's' : ''}
-          </span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                setIsCreating(true);
+                setTimeout(() => inputRef.current?.focus(), 50);
+              }}
+              className={`p-1 rounded hover:bg-purple-500/20 text-purple-400 hover:text-purple-300 transition-colors flex items-center justify-center`}
+              title="Add New File"
+            >
+              <Plus size={13} />
+            </button>
+            <span className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              {localFiles.length} file{localFiles.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
         <div className={`mx-2 border-b ${isDark ? 'border-slate-700/50' : 'border-slate-200'} mb-[9px]`} />
         
@@ -498,7 +541,64 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
             <div className="absolute inset-0 pointer-events-none z-10 rounded-md backdrop-blur-[1.5px] bg-blue-500/10" />
           )}
 
-          {sortedChildren.length === 0 ? (
+          {/* Inline New File Creator */}
+          {isCreating && (
+            <div className="px-1.5 mb-2">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleCommitNewFile();
+                }}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border shadow-md transition-all ${
+                  isDark
+                    ? 'bg-[#1e1e2e] border-purple-500/60 ring-1 ring-purple-500/30'
+                    : 'bg-white border-purple-400 ring-1 ring-purple-300'
+                }`}
+              >
+                <div className="shrink-0 flex items-center justify-center">
+                  <LangIcon language={previewLang} size={14} />
+                </div>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={newFileName}
+                  onChange={(e) => setNewFileName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setIsCreating(false);
+                      setNewFileName('');
+                    }
+                  }}
+                  placeholder="filename.ext (e.g. index.py, main.js)"
+                  className={`w-full bg-transparent text-xs font-mono outline-none ${
+                    isDark ? 'text-white placeholder:text-slate-500' : 'text-slate-900 placeholder:text-slate-400'
+                  }`}
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={!newFileName.trim()}
+                  className="shrink-0 p-1 rounded hover:bg-emerald-500/20 text-emerald-400 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                  title="Create file (Enter)"
+                >
+                  <Check size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreating(false);
+                    setNewFileName('');
+                  }}
+                  className="shrink-0 p-1 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                  title="Cancel (Esc)"
+                >
+                  <X size={12} />
+                </button>
+              </form>
+            </div>
+          )}
+
+          {sortedChildren.length === 0 && !isCreating ? (
             <div className={`flex items-center justify-center py-4 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
               <span className="text-[11px] italic">No files</span>
             </div>

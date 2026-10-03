@@ -81,7 +81,8 @@ interface EditorViewProps {
   activeFileId: string | null;
   loadingFileId: string | null;
   onFileSelect: (id: string) => void;
-  onFileCreate: () => void;
+  onFileCreate: (name?: string, content?: string, language?: string) => void;
+  onAgentFileCreate?: (name: string, content: string, language?: string) => void;
   onFileDelete: (id: string) => void;
   onFileUpload: (file: File) => void;
   onCodeChange: (id: string, newCode: string) => void;
@@ -96,10 +97,12 @@ type MobilePane = 'editor' | 'runner' | 'gemini' | 'chat' | 'voice';
 
 /* ── Component ─────────────────────────────────────────────────────── */
 export const EditorView: React.FC<EditorViewProps> = ({
-  files, activeFileId, loadingFileId, onFileSelect, onFileCreate, onFileDelete, onFileUpload,
+  files, activeFileId, loadingFileId, onFileSelect, onFileCreate, onAgentFileCreate, onFileDelete, onFileUpload,
   onCodeChange, onLanguageChange, onOpenGitHub, onOpenCollab, onRepoDelete, collab,
 }) => {
   const { isDark, toggleTheme } = useTheme();
+
+  const [triggerNewFile, setTriggerNewFile] = useState(0);
 
   const activeFile = useMemo((): StoredFile | null => {
     if (!activeFileId) return null;
@@ -334,8 +337,26 @@ export const EditorView: React.FC<EditorViewProps> = ({
           </div>
           <div className="px-2 pt-3 pb-2 space-y-2">
             <div className="flex gap-2">
-              <button onClick={onFileCreate} className="flex-1 flex items-center justify-center gap-2 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95">
-                <Plus size={14} /> New Snippet
+              <button
+                onClick={() => {
+                  setTriggerNewFile(prev => prev + 1);
+                  setIsSidebarOpen(false);
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
+              >
+                <Plus size={14} /> New File
+              </button>
+              <button
+                onClick={() => {
+                  onFileCreate();
+                  setIsSidebarOpen(false);
+                }}
+                className={`flex items-center justify-center px-2.5 rounded-lg border text-xs font-semibold transition-all active:scale-95 shadow-sm ${
+                  isDark ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                }`}
+                title="Create scratchpad snippet"
+              >
+                Snippet
               </button>
               <button 
                 onClick={() => fileInputRef.current?.click()} 
@@ -356,6 +377,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
           <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
             <FileExplorer files={files} activeFileId={activeFileId} loadingFileId={loadingFileId}
               onFileSelect={handleMobileFileSelect} onFileDelete={onFileDelete} onRepoDelete={onRepoDelete}
+              onFileCreate={onFileCreate} triggerNewFile={triggerNewFile}
               isInRoom={isInRoom} isHost={collab.isHost} sharedFiles={collab.sharedFiles}
               collabFileContents={collabFileContents} onAddToCollab={handleAddToCollab}
               onRemoveFromCollab={handleRemoveFromCollab} onSelectCollabFile={handleSelectCollabFile} />
@@ -369,8 +391,20 @@ export const EditorView: React.FC<EditorViewProps> = ({
           <Panel defaultSize="18%" minSize="12%" maxSize="35%" className={`flex flex-col ${bg} border-r ${borderColor}`}>
             <div className="px-2 pt-4 pb-2 space-y-2 shrink-0">
               <div className="flex gap-2">
-                <button onClick={onFileCreate} className="flex-1 flex items-center justify-center gap-2 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95">
-                  <Plus size={14} /> New Snippet
+                <button
+                  onClick={() => setTriggerNewFile(prev => prev + 1)}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
+                >
+                  <Plus size={14} /> New File
+                </button>
+                <button
+                  onClick={() => onFileCreate()}
+                  className={`flex items-center justify-center px-2.5 rounded-lg border text-xs font-semibold transition-all active:scale-95 shadow-sm ${
+                    isDark ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                  }`}
+                  title="Create quick scratchpad snippet"
+                >
+                  Snippet
                 </button>
                 <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center px-3 rounded-lg bg-[#CAA4F7]/20 hover:bg-[#CAA4F7]/30 text-[#CAA4F7] border border-[#CAA4F7]/30 transition-all active:scale-95 shadow-sm" title="Upload File">
                   <Upload size={14} />
@@ -391,6 +425,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
               ) : (
                 <FileExplorer files={files} activeFileId={activeFileId} loadingFileId={loadingFileId}
                   onFileSelect={onFileSelect} onFileDelete={onFileDelete} onRepoDelete={onRepoDelete}
+                  onFileCreate={onFileCreate} triggerNewFile={triggerNewFile}
                   isInRoom={isInRoom} isHost={collab.isHost} sharedFiles={collab.sharedFiles}
                   collabFileContents={collabFileContents} onAddToCollab={handleAddToCollab}
                   onRemoveFromCollab={handleRemoveFromCollab} onSelectCollabFile={handleSelectCollabFile} />
@@ -422,9 +457,12 @@ export const EditorView: React.FC<EditorViewProps> = ({
                 <div className="text-center max-w-md px-8 relative z-10">
                   <FolderOpen size={48} className={`mx-auto mb-8 ${isDark ? 'text-blue-400/50' : 'text-blue-500/50'}`} />
                   <h2 className={`text-xl font-semibold mb-2 ${textPrimary}`}>Welcome to Skiffy</h2>
-                  <div className="flex gap-4 justify-center">
-                    <button onClick={onFileCreate} className="flex items-center gap-2 px-6 py-3 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] rounded-lg text-sm font-medium transition-colors shadow-md">
-                      <Plus size={18} /> New Snippet
+                  <div className="flex gap-3 justify-center">
+                    <button onClick={() => setTriggerNewFile(prev => prev + 1)} className="flex items-center gap-2 px-6 py-3 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] rounded-lg text-sm font-bold transition-all shadow-md active:scale-95">
+                      <Plus size={18} /> New File
+                    </button>
+                    <button onClick={() => onFileCreate()} className={`flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-semibold border transition-all active:scale-95 shadow-sm ${isDark ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'}`}>
+                      Snippet
                     </button>
                   </div>
                 </div>
@@ -490,8 +528,10 @@ export const EditorView: React.FC<EditorViewProps> = ({
               <Panel defaultSize="26%" minSize="18%" maxSize="45%" className="flex flex-col min-w-0">
                 <GeminiPanel
                   activeFile={activeFile}
+                  allFiles={files}
                   onCodeChange={(fileId, content) => onCodeChange(fileId, content)}
                   onFileCreate={onFileCreate}
+                  onAgentFileCreate={onAgentFileCreate || onFileCreate}
                 />
               </Panel>
             </>
@@ -599,10 +639,14 @@ export const EditorView: React.FC<EditorViewProps> = ({
               {/* Content */}
               <div className="text-center max-w-md px-8 relative z-10">
                 <FolderOpen size={48} className={`mx-auto mb-8 ${isDark ? 'text-blue-400/50' : 'text-blue-500/50'}`} />
-                <h2 className={`text-xl font-semibold mb-2 ${textPrimary}`}>Welcome to Skiffy</h2>
-                <button onClick={onFileCreate} className="flex items-center gap-2 px-6 py-3 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] rounded-lg text-sm font-medium transition-colors shadow-md">
-                  <Plus size={18} /> New Snippet
-                </button>
+                <div className="flex gap-2.5 justify-center">
+                  <button onClick={() => setTriggerNewFile(prev => prev + 1)} className="flex items-center gap-2 px-5 py-2.5 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] rounded-lg text-sm font-bold transition-all shadow-md">
+                    <Plus size={16} /> New File
+                  </button>
+                  <button onClick={() => onFileCreate()} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-semibold border ${isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                    Snippet
+                  </button>
+                </div>
               </div>
             </div>
           ) : mobilePane === 'editor' ? (
@@ -654,8 +698,10 @@ export const EditorView: React.FC<EditorViewProps> = ({
             <div className="flex-1 min-h-0 overflow-hidden">
               <GeminiPanel
                 activeFile={activeFile}
+                allFiles={files}
                 onCodeChange={(fileId, content) => onCodeChange(fileId, content)}
                 onFileCreate={onFileCreate}
+                onAgentFileCreate={onAgentFileCreate || onFileCreate}
               />
             </div>
           ) : mobilePane === 'chat' ? (

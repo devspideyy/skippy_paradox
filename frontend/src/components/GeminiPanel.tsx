@@ -30,8 +30,10 @@ interface Conversation {
 
 interface GeminiPanelProps {
   activeFile: StoredFile | null;
+  allFiles?: StoredFile[];
   onCodeChange?: (fileId: string, content: string) => void;
   onFileCreate?: () => void;
+  onAgentFileCreate?: (name: string, content: string, language?: string) => void;
 }
 
 /* ── Constants ─────────────────────────────────────────────────────── */
@@ -338,9 +340,13 @@ function ConversationDropdown({
   );
 }
 
-/* ── Main panel ────────────────────────────────────────────────────── */
-
-export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, onCodeChange, onFileCreate }) => {
+export const GeminiPanel: React.FC<GeminiPanelProps> = ({
+  activeFile,
+  allFiles,
+  onCodeChange,
+  onFileCreate,
+  onAgentFileCreate,
+}) => {
   const { isDark } = useTheme();
 
   // Agent Harness & Provider state
@@ -578,6 +584,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, onCodeChan
           provider,
           model,
           signal: controller.signal,
+          currentFiles: allFiles,
           callbacks: {
             onStep: (step) => {
               setMessages((prev) =>
@@ -598,8 +605,17 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile, onCodeChan
             onUpdateFile: (fileId, content) => {
               if (onCodeChange) onCodeChange(fileId, content);
             },
-            onCreateFile: () => {
-              if (onFileCreate) onFileCreate();
+            onCreateFile: (name, content, language) => {
+              if (onAgentFileCreate) {
+                onAgentFileCreate(name, content, language);
+              } else if (onFileCreate) {
+                (onFileCreate as any)(name, content, language);
+              }
+            },
+            onSaveFile: (file) => {
+              if (onAgentFileCreate) {
+                onAgentFileCreate(file.name, file.content, file.language);
+              }
             },
           },
         });

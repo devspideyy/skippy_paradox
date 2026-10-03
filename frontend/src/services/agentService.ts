@@ -5,6 +5,7 @@
 
 import { executeCode } from './judge0Service';
 import { getStoredFiles, saveFiles, StoredFile, computeContentHash } from './storageService';
+import { detectLanguage } from '../utils/detectLanguage';
 
 export interface ToolDefinition {
   name: string;
@@ -29,6 +30,7 @@ export interface AgentExecutionCallback {
   onStep: (step: AgentStep) => void;
   onUpdateFile: (fileId: string, content: string) => void;
   onCreateFile: (name: string, content: string, language: string) => void;
+  onSaveFile?: (file: StoredFile) => void;
 }
 
 export const AGENT_TOOLS: ToolDefinition[] = [
@@ -109,9 +111,10 @@ export const AGENT_TOOLS: ToolDefinition[] = [
 export async function executeAgentTool(
   name: string,
   args: any,
-  callbacks: AgentExecutionCallback
+  callbacks: AgentExecutionCallback,
+  currentFiles?: StoredFile[]
 ): Promise<any> {
-  const files = getStoredFiles();
+  const files = currentFiles && currentFiles.length > 0 ? currentFiles : getStoredFiles();
 
   switch (name) {
     case 'list_files': {
@@ -126,9 +129,9 @@ export async function executeAgentTool(
 
     case 'read_file': {
       const targetName = (args.filename || '').trim().toLowerCase();
-      const found = files.find(f => f.name.toLowerCase() === targetName || (f.path && f.path.toLowerCase().endsWith(targetName)));
+      const found = files.find(f => f.name.toLowerCase() === targetName || (f.path && f.path.toLowerCase().endsWith(targetName)) || f.id === targetName);
       if (!found) {
-        return { error: `File '${args.filename}' not found. Available files: ${files.map(f => f.name).join(', ')}` };
+        return { error: `File '${args.filename}' not found. Available files in workspace: ${files.map(f => f.name).join(', ')}` };
       }
       return {
         filename: found.name,
@@ -138,9 +141,9 @@ export async function executeAgentTool(
     }
 
     case 'write_file': {
-      const filename = args.filename.trim();
-      const content = args.content;
-      const lang = args.language || 'plaintext';
+      const filename = (args.filename || 'untitled.txt').trim();
+      const content = args.content ?? '';
+      const lang = args.language || detectLanguage(filename, content) || 'plaintext';
 
       const existingIndex = files.findIndex(f => f.name.toLowerCase() === filename.toLowerCase());
       if (existingIndex >= 0) {
@@ -148,10 +151,12 @@ export async function executeAgentTool(
         file.content = content;
         file.contentHash = computeContentHash(content);
         file.lastModified = Date.now();
-        if (args.language) file.language = args.language;
+        if (lang) file.language = lang;
         saveFiles(files);
         callbacks.onUpdateFile(file.id, content);
-        return { success: true, message: `Updated file ${filename}` };
+        callbacks.onCreateFile(filename, content, file.language);
+        if (callbacks.onSaveFile) callbacks.onSaveFile(file);
+        return { success: true, message: `Updated file ${filename}`, fileId: file.id };
       } else {
         const newId = `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         const newFile: StoredFile = {
@@ -161,10 +166,12 @@ export async function executeAgentTool(
           language: lang,
           contentHash: computeContentHash(content),
           lastModified: Date.now(),
+          contentLoaded: true,
         };
         files.push(newFile);
         saveFiles(files);
         callbacks.onCreateFile(filename, content, lang);
+        if (callbacks.onSaveFile) callbacks.onSaveFile(newFile);
         return { success: true, message: `Created new file ${filename}`, fileId: newId };
       }
     }
@@ -173,7 +180,7 @@ export async function executeAgentTool(
       const filename = (args.filename || '').trim().toLowerCase();
       const file = files.find(f => f.name.toLowerCase() === filename || (f.path && f.path.toLowerCase().endsWith(filename)));
       if (!file) {
-        return { error: `File '${args.filename}' not found.` };
+        return { error: `File '${args.filename}' not found. Available files: ${files.map(f => f.name).join(', ')}` };
       }
 
       const oldStr = args.old_string;
@@ -188,6 +195,7 @@ export async function executeAgentTool(
       file.lastModified = Date.now();
       saveFiles(files);
       callbacks.onUpdateFile(file.id, file.content);
+      if (callbacks.onSaveFile) callbacks.onSaveFile(file);
       return { success: true, message: `Successfully updated ${file.name}` };
     }
 
@@ -244,6 +252,7 @@ export async function runAgentLoop({
   provider = 'gemini',
   model = 'gemini-2.0-flash',
   openRouterBaseUrl = 'https://openrouter.ai/api/v1',
+  currentFiles,
   callbacks,
   signal,
 }: {
@@ -252,18 +261,38 @@ export async function runAgentLoop({
   provider?: 'gemini' | 'openrouter';
   model?: string;
   openRouterBaseUrl?: string;
+  currentFiles?: StoredFile[];
   callbacks: AgentExecutionCallback;
   signal?: AbortSignal;
 }): Promise<string> {
   const MAX_ITERATIONS = 8;
   let iterations = 0;
 
+  const activeFiles = currentFiles && currentFiles.length > 0 ? currentFiles : getStoredFiles();
+  const fileListText = activeFiles
+    .map(f => `- ${f.name} (${f.language || 'text'}, ${f.content?.length || 0} chars)`)
+    .join('\n');
+
   if (provider === 'openrouter') {
     // OpenRouter (OpenAI-compatible) Tool Calling Loop
     const messages: any[] = [
       {
         role: 'system',
-        content: `You are Skiff, an autonomous senior coding agent. You can read, write, list files, and execute code using tools. Make changes, run tests or code to verify correctness, and iterate until the task is complete.`,
+        content: `You are Skiff, an autonomous senior coding agent in a browser IDE.
+Current files in workspace:
+${fileListText || '(No files yet)'}
+
+Available tools:
+- list_files: lists all files in the workspace
+- read_file: reads content of an existing file (pass filename)
+- write_file: creates a new file or completely writes code to a file (pass filename, content, language)
+- edit_file: surgical search and replace
+- search_files: search across files
+- execute_code: runs python, javascript, typescript code and returns stdout/stderr output
+
+When asked to create or write a file, ALWAYS call the 'write_file' tool.
+When asked to run, test, or verify code, call the 'execute_code' tool.
+Be autonomous and proactive. Make changes and verify them.`,
       },
       {
         role: 'user',
@@ -373,7 +402,7 @@ export async function runAgentLoop({
 
           let toolResult = null;
           try {
-            toolResult = await executeAgentTool(fnName, parsedArgs, callbacks);
+            toolResult = await executeAgentTool(fnName, parsedArgs, callbacks, activeFiles);
             callbacks.onStep({
               id: `${tc.id}-done`,
               type: 'tool_result',
@@ -412,7 +441,23 @@ export async function runAgentLoop({
     const contents: any[] = [
       {
         role: 'user',
-        parts: [{ text: `You are Skiff, an autonomous coding agent. Use tools to list, read, write files, and execute code.\n\nTask: ${prompt}` }],
+        parts: [{ text: `You are Skiff, an autonomous senior coding agent in a browser IDE.
+Current files in workspace:
+${fileListText || '(No files yet)'}
+
+Available tools:
+- list_files: lists all files in the workspace
+- read_file: reads content of an existing file (pass filename)
+- write_file: creates a new file or completely writes code to a file (pass filename, content, language)
+- edit_file: surgical search and replace
+- search_files: search across files
+- execute_code: runs python, javascript, typescript code and returns stdout/stderr output
+
+When asked to create or write a file, ALWAYS call the 'write_file' tool.
+When asked to run, test, or verify code, call the 'execute_code' tool.
+Be autonomous and proactive. Make changes and verify them.
+
+Task: ${prompt}` }],
       },
     ];
 
@@ -473,7 +518,7 @@ export async function runAgentLoop({
 
           let toolOutput: any;
           try {
-            toolOutput = await executeAgentTool(fc.name, fc.args, callbacks);
+            toolOutput = await executeAgentTool(fc.name, fc.args, callbacks, activeFiles);
             callbacks.onStep({
               id: `${stepId}-done`,
               type: 'tool_result',

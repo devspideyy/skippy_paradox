@@ -77,19 +77,74 @@ export const App: React.FC = () => {
   const autoSharedRef = useRef(false);
 
   // ─── File Handlers ───────────────────────────────────────────────────
-  const handleFileCreate = useCallback(() => {
+  const handleFileCreate = useCallback((name?: string, content: string = '', language?: string) => {
+    const fileName = name?.trim() || `Snippet-${files.length + 1}`;
+    const detectedLang = language || detectLanguage(fileName, content) || '';
+    const newId = `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newFile: StoredFile = {
-      id: Date.now().toString(),
-      name: `Snippet-${files.length + 1}`,
-      content: '',
-      language: '',
-      contentHash: computeContentHash(''),
+      id: newId,
+      name: fileName,
+      content,
+      language: detectedLang,
+      contentHash: computeContentHash(content),
       lastModified: Date.now(),
+      contentLoaded: true,
     };
-    setFiles(prev => [...prev, newFile]);
-    setActiveFileId(newFile.id);
+    setFiles(prev => {
+      const existingIdx = prev.findIndex(f => f.name.toLowerCase() === fileName.toLowerCase());
+      if (existingIdx >= 0) {
+        const next = [...prev];
+        next[existingIdx] = {
+          ...next[existingIdx],
+          content: content || next[existingIdx].content,
+          language: detectedLang || next[existingIdx].language,
+          contentHash: computeContentHash(content || next[existingIdx].content),
+          lastModified: Date.now(),
+        };
+        return next;
+      }
+      return [...prev, newFile];
+    });
+    const existing = files.find(f => f.name.toLowerCase() === fileName.toLowerCase());
+    setActiveFileId(existing ? existing.id : newId);
     soundEffects.success();
-  }, [files.length]);
+    return newFile;
+  }, [files]);
+
+  const handleAgentFileCreate = useCallback((name: string, content: string = '', language?: string) => {
+    const fileName = name.trim();
+    if (!fileName) return;
+    const detectedLang = language || detectLanguage(fileName, content) || '';
+
+    setFiles(prev => {
+      const existingIdx = prev.findIndex(f => f.name.toLowerCase() === fileName.toLowerCase());
+      if (existingIdx >= 0) {
+        const next = [...prev];
+        next[existingIdx] = {
+          ...next[existingIdx],
+          content,
+          language: detectedLang || next[existingIdx].language,
+          contentHash: computeContentHash(content),
+          lastModified: Date.now(),
+        };
+        setActiveFileId(next[existingIdx].id);
+        return next;
+      }
+      const newId = `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const newFile: StoredFile = {
+        id: newId,
+        name: fileName,
+        content,
+        language: detectedLang,
+        contentHash: computeContentHash(content),
+        lastModified: Date.now(),
+        contentLoaded: true,
+      };
+      setActiveFileId(newId);
+      return [...prev, newFile];
+    });
+    soundEffects.success();
+  }, []);
 
   // ─── Keyboard Shortcuts ──────────────────────────────────────────────
   useKeyboardShortcuts([
@@ -102,7 +157,7 @@ export const App: React.FC = () => {
     {
       key: 'n',
       ctrl: true,
-      action: handleFileCreate,
+      action: () => handleFileCreate(),
       description: 'Create new file'
     },
     {
@@ -333,7 +388,7 @@ export const App: React.FC = () => {
       id: 'new-file',
       label: 'Create New File',
       icon: <Plus size={16} />,
-      action: handleFileCreate,
+      action: () => handleFileCreate(),
       keywords: ['new', 'create', 'file', 'snippet'],
       shortcut: 'Ctrl+N'
     },
@@ -380,6 +435,7 @@ export const App: React.FC = () => {
             loadingFileId={loadingFileId}
             onFileSelect={handleFileSelect}
             onFileCreate={handleFileCreate}
+            onAgentFileCreate={handleAgentFileCreate}
             onFileDelete={handleFileDelete}
             onFileUpload={handleFileUpload}
             onCodeChange={handleCodeChange}

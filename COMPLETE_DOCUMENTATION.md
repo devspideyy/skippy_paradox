@@ -71,13 +71,13 @@ npm install
 npm run dev
 ```
 
-Frontend will run on: `http://localhost:5173` (or next available port)
+Frontend will run on: `http://localhost:3000` (or next available port)
 
 ## ✅ Verification
 
 Once all three servers are running:
 
-1. Open `http://localhost:5173` in your browser
+1. Open `http://localhost:3000` in your browser
 2. You should see the **DotField animation** on the welcome screen (purple dots that react to your mouse)
 3. Click "New Snippet" to create a file
 4. The **Code Runner** should work (click "Run Code" button)

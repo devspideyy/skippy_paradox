@@ -76,7 +76,10 @@ const DotField = memo<DotFieldProps>(({
     }
 
     function doResize() {
-      const rect = canvas.parentElement!.getBoundingClientRect();
+      if (!canvas || !ctx) return;
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
       const w = rect.width;
       const h = rect.height;
       canvas.width = w * dpr;
@@ -133,6 +136,7 @@ const DotField = memo<DotFieldProps>(({
     let frameCount = 0;
 
     function tick() {
+      if (!ctx) return;
       frameCount++;
       const dots = dotsRef.current;
       const m = mouseRef.current;

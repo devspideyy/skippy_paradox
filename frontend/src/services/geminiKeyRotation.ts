@@ -197,6 +197,8 @@ class GeminiKeyRotationService {
       currentIndex: 0,
       usageCounts: {},
       lastRotation: Date.now(),
+      dailyCount: 0,
+      dailyWindowStart: Date.now(),
     };
     this.saveState();
   }

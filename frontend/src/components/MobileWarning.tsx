@@ -15,7 +15,7 @@ export const MobileWarning: React.FC = () => {
               <Layout size={14} className="text-white" />
             </div>
             <h1 className={`text-lg font-bold tracking-tight quantico-font ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              CodeCollab <span className="text-blue-500 text-[10px] font-mono font-normal ml-0.5 opacity-70">// v{VERSION}</span>
+              Skiffy <span className="text-blue-500 text-[10px] font-mono font-normal ml-0.5 opacity-70">// v{VERSION}</span>
             </h1>
           </div>
         </div>
@@ -26,7 +26,7 @@ export const MobileWarning: React.FC = () => {
           </h2>
 
           <p className={`text-center text-sm mb-4 leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-            CodeCollab's code editor interface requires a larger screen for the best experience.
+            Skiffy's code editor interface requires a larger screen for the best experience.
             The editor workflow is optimized for desktop use.
           </p>
 

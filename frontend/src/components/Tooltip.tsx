@@ -24,7 +24,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const { isDark } = useTheme();
   const [isVisible, setIsVisible] = useState(false);
   const [coords, setCoords] = useState({ x: 0, y: 0 });
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
 
   const showTooltip = () => {

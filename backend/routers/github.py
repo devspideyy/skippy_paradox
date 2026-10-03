@@ -4,6 +4,7 @@ Proxies requests to GitHub API with the user's access token,
 avoiding CORS issues from the browser.
 """
 
+from urllib.parse import urlparse
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
@@ -11,6 +12,13 @@ from fastapi.responses import PlainTextResponse
 router = APIRouter()
 
 GITHUB_API = "https://api.github.com"
+ALLOWED_DOWNLOAD_DOMAINS = {
+    "raw.githubusercontent.com",
+    "api.github.com",
+    "github.com",
+    "objects.githubusercontent.com",
+    "media.githubusercontent.com",
+}
 
 
 def _gh_headers(authorization: str | None) -> dict:
@@ -81,6 +89,10 @@ async def fetch_file(
     authorization: str | None = Header(None),
 ):
     """Fetch raw file content from a download URL."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.netloc.lower() not in ALLOWED_DOWNLOAD_DOMAINS:
+        raise HTTPException(400, "URL host is not permitted. Only GitHub URLs can be proxied.")
+
     headers = {}
     if authorization:
         headers["Authorization"] = authorization

@@ -3,9 +3,9 @@
  * Manages all app notifications in one place.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '../hooks/useTheme';
-import { Bell, X, Check, AlertCircle, Info, CheckCircle } from 'lucide-react';
+import { Bell, X, AlertCircle, Info, CheckCircle } from 'lucide-react';
 
 export interface Notification {
   id: string;

@@ -221,9 +221,9 @@ export const EditorView: React.FC<EditorViewProps> = ({
             className={`md:hidden p-1.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-200'}`}>
             <Menu size={20} />
           </button>
-          <img src="/CodeCollab-logo.png" alt="CodeCollab Logo" className="w-8 h-8 sm:w-10 sm:h-10 object-contain" />
+          <img src="/CodeCollab-logo.png" alt="Skiffy Logo" className="w-8 h-8 sm:w-10 sm:h-10 object-contain" />
           <span className={`hidden sm:inline font-black tracking-tighter quantico-font text-[24px] sm:text-[28px] ${textPrimary} select-none`}>
-            CodeCollab
+            Skiffy
           </span>
           <button 
             onClick={toggleTheme}
@@ -404,7 +404,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
                 {/* Content */}
                 <div className="text-center max-w-md px-8 relative z-10">
                   <FolderOpen size={48} className={`mx-auto mb-8 ${isDark ? 'text-blue-400/50' : 'text-blue-500/50'}`} />
-                  <h2 className={`text-xl font-semibold mb-2 ${textPrimary}`}>Welcome to CodeCollab</h2>
+                  <h2 className={`text-xl font-semibold mb-2 ${textPrimary}`}>Welcome to Skiffy</h2>
                   <div className="flex gap-4 justify-center">
                     <button onClick={onFileCreate} className="flex items-center gap-2 px-6 py-3 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] rounded-lg text-sm font-medium transition-colors shadow-md">
                       <Plus size={18} /> New Snippet
@@ -572,7 +572,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
               {/* Content */}
               <div className="text-center max-w-md px-8 relative z-10">
                 <FolderOpen size={48} className={`mx-auto mb-8 ${isDark ? 'text-blue-400/50' : 'text-blue-500/50'}`} />
-                <h2 className={`text-xl font-semibold mb-2 ${textPrimary}`}>Welcome to CodeCollab</h2>
+                <h2 className={`text-xl font-semibold mb-2 ${textPrimary}`}>Welcome to Skiffy</h2>
                 <button onClick={onFileCreate} className="flex items-center gap-2 px-6 py-3 bg-[#CAA4F7] hover:bg-[#D4B5F9] text-[#1E1E2A] rounded-lg text-sm font-medium transition-colors shadow-md">
                   <Plus size={18} /> New Snippet
                 </button>
@@ -588,16 +588,23 @@ export const EditorView: React.FC<EditorViewProps> = ({
                   <button onClick={collab.leaveRoom} className="mt-4 px-4 py-2 rounded-lg bg-red-500/15 text-red-400 text-xs font-bold hover:bg-red-500/25 transition-colors">Cancel</button>
                 </div>
               )}
-              {isActiveFileShared && collab.provider && collab.status === 'connected' ? (
-                <CollabMonacoEditor file={activeFile} theme={isDark ? 'dark' : 'light'} fontSize={fontSize}
-                  provider={collab.provider} onChange={(code) => onCodeChange(activeFile.id, code)}
-                  onCursorChange={(ln, col) => setCursorPosition({ ln, col })}
-                  onSelectionChange={(count) => setSelectionCount(count)} />
+              {activeFile ? (
+                isActiveFileShared && collab.provider && collab.status === 'connected' ? (
+                  <CollabMonacoEditor file={activeFile} theme={isDark ? 'dark' : 'light'} fontSize={fontSize}
+                    provider={collab.provider} onChange={(code) => onCodeChange(activeFile.id, code)}
+                    onCursorChange={(ln, col) => setCursorPosition({ ln, col })}
+                    onSelectionChange={(count) => setSelectionCount(count)} />
+                ) : (
+                  <ModernMonacoEditor file={activeFile} theme={isDark ? 'dark' : 'light'} fontSize={fontSize}
+                    onChange={(code) => onCodeChange(activeFile.id, code)}
+                    onCursorChange={(ln, col) => setCursorPosition({ ln, col })}
+                    onSelectionChange={(count) => setSelectionCount(count)} />
+                )
               ) : (
-                <ModernMonacoEditor file={activeFile} theme={isDark ? 'dark' : 'light'} fontSize={fontSize}
-                  onChange={(code) => onCodeChange(activeFile.id, code)}
-                  onCursorChange={(ln, col) => setCursorPosition({ ln, col })}
-                  onSelectionChange={(count) => setSelectionCount(count)} />
+                <div className={`h-full flex flex-col items-center justify-center ${bgEditor} ${textMuted}`}>
+                  <FileCode size={24} className="mb-2 opacity-50" />
+                  <p className="text-xs font-semibold">Select a file to edit</p>
+                </div>
               )}
             </div>
           ) : mobilePane === 'runner' ? (

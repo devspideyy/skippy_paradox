@@ -395,7 +395,7 @@ export const GeminiPanel: React.FC<GeminiPanelProps> = ({ activeFile }) => {
     if (context) {
       contents.push({
         role: 'user',
-        parts: [{ text: `You are an expert coding assistant in CodeCollab. Use this file context when relevant:\n\n${context}` }],
+        parts: [{ text: `You are an expert coding assistant in Skiffy. Use this file context when relevant:\n\n${context}` }],
       });
     }
 

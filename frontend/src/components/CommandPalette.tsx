@@ -5,10 +5,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTheme } from '../hooks/useTheme';
-import { 
-  Search, FileCode, Plus, Upload, Github, Users, Sun, Moon, 
-  Sparkles, MessageSquare, X, Command 
-} from 'lucide-react';
+import { Search, Command } from 'lucide-react';
 import DotField from './DotField';
 
 interface Command {

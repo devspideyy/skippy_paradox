@@ -1,6 +1,6 @@
 {
-  "name": "CodeCollab - Real-time Code Collaboration",
-  "short_name": "CodeCollab",
+  "name": "Skiffy - Real-time Code Collaboration",
+  "short_name": "Skiffy",
   "description": "Professional code editor with real-time collaboration, AI assistance, and GitHub integration",
   "start_url": "/",
   "display": "standalone",

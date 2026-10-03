@@ -128,7 +128,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'CodeCollab', options)
+    self.registration.showNotification(data.title || 'Skiffy', options)
   );
 });
 

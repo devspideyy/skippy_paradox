@@ -3,9 +3,9 @@
  * Only renders visible items for optimal performance with 1000+ files.
  */
 
-import React, { useRef, useState, useEffect } from 'react';
-import { FixedSizeList as List } from 'react-window';
-import AutoSizer from 'react-virtualized-auto-sizer';
+import React, { CSSProperties } from 'react';
+import { List } from 'react-window';
+import { AutoSizer } from 'react-virtualized-auto-sizer';
 
 interface VirtualizedFileListProps<T> {
   items: T[];
@@ -14,41 +14,47 @@ interface VirtualizedFileListProps<T> {
   className?: string;
 }
 
+interface RowProps<T> {
+  items: T[];
+  renderItem: (item: T, index: number) => React.ReactNode;
+}
+
+function VirtualizedRow<T>({
+  index,
+  style,
+  items,
+  renderItem,
+}: {
+  index: number;
+  style: CSSProperties;
+} & RowProps<T>) {
+  return (
+    <div style={style}>
+      {renderItem(items[index], index)}
+    </div>
+  );
+}
+
 export function VirtualizedFileList<T>({
   items,
   itemHeight,
   renderItem,
   className = '',
 }: VirtualizedFileListProps<T>) {
-  const listRef = useRef<List>(null);
-  const [scrollOffset, setScrollOffset] = useState(0);
-
-  // Smooth scroll behavior
-  const scrollToItem = (index: number) => {
-    listRef.current?.scrollToItem(index, 'smart');
-  };
-
   return (
     <div className={`${className} h-full`}>
-      <AutoSizer>
-        {({ height, width }) => (
+      <AutoSizer
+        renderProp={({ height, width }) => (
           <List
-            ref={listRef}
-            height={height}
-            itemCount={items.length}
-            itemSize={itemHeight}
-            width={width}
-            onScroll={({ scrollOffset }) => setScrollOffset(scrollOffset)}
-            overscanCount={5} // Render 5 extra items for smooth scrolling
-          >
-            {({ index, style }) => (
-              <div style={style}>
-                {renderItem(items[index], index)}
-              </div>
-            )}
-          </List>
+            style={{ height: height ?? '100%', width: width ?? '100%' }}
+            rowCount={items.length}
+            rowHeight={itemHeight}
+            rowComponent={VirtualizedRow as any}
+            rowProps={{ items, renderItem }}
+            overscanCount={5}
+          />
         )}
-      </AutoSizer>
+      />
     </div>
   );
 }

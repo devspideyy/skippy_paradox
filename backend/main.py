@@ -11,7 +11,7 @@ load_dotenv()
 
 from routers import auth, github, judge0  # noqa: E402
 
-app = FastAPI(title="CodeCollab API", version="1.0.0")
+app = FastAPI(title="Skiffy API", version="1.0.0")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 FRONTEND_ORIGINS = os.getenv("FRONTEND_ORIGINS", FRONTEND_URL)
@@ -32,7 +32,7 @@ app.include_router(judge0.router, prefix="/api/judge0", tags=["Judge0"])
 
 @app.get("/")
 def root_health():
-    return {"status": "ok", "service": "CodeCollab API"}
+    return {"status": "ok", "service": "Skiffy API"}
 
 
 @app.get("/health")

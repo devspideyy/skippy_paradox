@@ -2,7 +2,11 @@
  * Judge0 Service — Code execution via Judge0 API through backend proxy.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const RAW_API_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
+const NORMALIZED_API_URL = RAW_API_URL.replace(/\/+$/, '');
+const API_BASE = NORMALIZED_API_URL
+  ? (NORMALIZED_API_URL.endsWith('/api') ? NORMALIZED_API_URL : `${NORMALIZED_API_URL}/api`)
+  : '/api';
 
 export interface ExecutionRequest {
   source_code: string;
@@ -34,7 +38,7 @@ export interface Language {
  * Execute code using Judge0.
  */
 export async function executeCode(request: ExecutionRequest): Promise<ExecutionResult> {
-  const response = await fetch(`${API_BASE}/api/judge0/execute`, {
+  const response = await fetch(`${API_BASE}/judge0/execute`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -54,7 +58,7 @@ export async function executeCode(request: ExecutionRequest): Promise<ExecutionR
  * Get list of supported languages.
  */
 export async function getSupportedLanguages(): Promise<Language[]> {
-  const response = await fetch(`${API_BASE}/api/judge0/languages`);
+  const response = await fetch(`${API_BASE}/judge0/languages`);
 
   if (!response.ok) {
     throw new Error('Failed to fetch supported languages');
@@ -68,7 +72,7 @@ export async function getSupportedLanguages(): Promise<Language[]> {
  * Check Judge0 API status.
  */
 export async function getJudge0Status(): Promise<{ status: string; judge0?: any; message?: string }> {
-  const response = await fetch(`${API_BASE}/api/judge0/status`);
+  const response = await fetch(`${API_BASE}/judge0/status`);
 
   if (!response.ok) {
     throw new Error('Failed to check Judge0 status');

@@ -16,7 +16,7 @@ import { useTheme } from '../hooks/useTheme';
 import { detectLanguage, detectLanguageAI } from '../utils/detectLanguage';
 import {
   FileCode, Plus, Upload, Code2, FolderOpen, Sun, Moon,
-  Github, Users, X, MessageSquare, PanelRightClose, Menu, Sparkles, Headphones, Play,
+  Github, Users, X, MessageSquare, PanelRightClose, Menu, Sparkles, Headphones, Play, Terminal,
 } from 'lucide-react';
 import {
   JavaScript, TypeScript, Python, CPlusPlus, C, Java, Go, RustDark, Ruby, PHP,
@@ -113,6 +113,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isGeminiOpen, setIsGeminiOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [mobilePane, setMobilePane] = useState<MobilePane>('editor');
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -237,6 +238,22 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
         <div className="flex items-center gap-1.5">
           <div className="hidden md:flex items-center gap-1.5">
+            {/* Terminal toggle */}
+            <button
+              onClick={() => setIsTerminalOpen(prev => !prev)}
+              aria-label={isTerminalOpen ? 'Hide Terminal' : 'Open Terminal'}
+              aria-expanded={isTerminalOpen}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
+                isTerminalOpen
+                  ? isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-500/15 text-emerald-700 border border-emerald-500/30'
+                  : isDark ? 'text-slate-400 hover:bg-slate-700/50 hover:text-emerald-400' : 'text-slate-500 hover:bg-slate-200 hover:text-emerald-700'
+              }`}
+              title={isTerminalOpen ? 'Hide Terminal' : 'Open Terminal'}
+            >
+              <Terminal size={15} />
+              <span className="hidden xl:inline">Terminal</span>
+            </button>
+
             {/* Gemini toggle */}
             <button
               onClick={() => setIsGeminiOpen(prev => !prev)}
@@ -437,25 +454,30 @@ export const EditorView: React.FC<EditorViewProps> = ({
                   )}
                 </Panel>
 
-                {/* Vertical Resize Handle */}
-                <Separator
-                  className={`group relative flex items-center justify-center w-[5px] cursor-col-resize select-none transition-all duration-150 ease-out
-                    ${isDark ? 'bg-slate-800/60 hover:bg-emerald-500/40' : 'bg-slate-300/60 hover:bg-emerald-400/40'}`}
-                >
-                  <div className={`w-[3px] h-8 rounded-full transition-all duration-200 ease-out
-                    ${isDark ? 'bg-slate-600 group-hover:bg-emerald-400 group-active:bg-emerald-300' : 'bg-slate-400 group-hover:bg-emerald-500 group-active:bg-emerald-600'}
-                    group-hover:h-12 group-active:h-16`}
-                  />
-                </Separator>
+                {isTerminalOpen && (
+                  <>
+                    {/* Vertical Resize Handle */}
+                    <Separator
+                      className={`group relative flex items-center justify-center w-[5px] cursor-col-resize select-none transition-all duration-150 ease-out
+                        ${isDark ? 'bg-slate-800/60 hover:bg-emerald-500/40' : 'bg-slate-300/60 hover:bg-emerald-400/40'}`}
+                    >
+                      <div className={`w-[3px] h-8 rounded-full transition-all duration-200 ease-out
+                        ${isDark ? 'bg-slate-600 group-hover:bg-emerald-400 group-active:bg-emerald-300' : 'bg-slate-400 group-hover:bg-emerald-500 group-active:bg-emerald-600'}
+                        group-hover:h-12 group-active:h-16`}
+                      />
+                    </Separator>
 
-                {/* Code Runner Panel */}
-                <Panel defaultSize="30%" minSize="15%" maxSize="60%" className="overflow-hidden">
-                  <CodeRunner
-                    code={activeFile.content}
-                    language={activeFile.language}
-                    fileName={activeFile.name}
-                  />
-                </Panel>
+                    {/* Code Runner / Terminal Panel */}
+                    <Panel defaultSize="32%" minSize="18%" maxSize="65%" className="overflow-hidden">
+                      <CodeRunner
+                        code={activeFile.content}
+                        language={activeFile.language}
+                        fileName={activeFile.name}
+                        onClose={() => setIsTerminalOpen(false)}
+                      />
+                    </Panel>
+                  </>
+                )}
               </Group>
             )}
           </Panel>

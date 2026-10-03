@@ -13,13 +13,24 @@ from routers import auth, github, judge0  # noqa: E402
 
 app = FastAPI(title="Skiffy API", version="1.0.0")
 
+DEFAULT_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://skiffy-lilac.vercel.app",
+    "https://codecollab.noharafamily.xyz",
+]
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-FRONTEND_ORIGINS = os.getenv("FRONTEND_ORIGINS", FRONTEND_URL)
-ALLOWED_ORIGINS = [origin.strip().rstrip("/") for origin in FRONTEND_ORIGINS.split(",") if origin.strip()] or [FRONTEND_URL]
+FRONTEND_ORIGINS = os.getenv("FRONTEND_ORIGINS", "")
+custom_origins = [origin.strip().rstrip("/") for origin in FRONTEND_ORIGINS.split(",") if origin.strip()]
+if FRONTEND_URL and FRONTEND_URL not in custom_origins:
+    custom_origins.append(FRONTEND_URL)
+
+ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + custom_origins))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

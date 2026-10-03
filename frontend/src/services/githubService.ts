@@ -8,9 +8,7 @@ const RAW_API_URL = (import.meta.env.VITE_API_URL || '').trim();
 const NORMALIZED_API_URL = RAW_API_URL.replace(/\/+$/, '');
 const API_BASE = NORMALIZED_API_URL
   ? (NORMALIZED_API_URL.endsWith('/api') ? NORMALIZED_API_URL : `${NORMALIZED_API_URL}/api`)
-  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-      ? 'https://skiffy.onrender.com/api'
-      : '/api');
+  : '/api';
 
 function isAbsoluteHttpUrl(url: string): boolean {
   return url.startsWith('http://') || url.startsWith('https://');
@@ -432,6 +430,14 @@ export async function pushFilesToGitHub(options: PushOptions): Promise<PushResul
   const { owner, repo, branch = 'main', message, files, token } = options;
   if (!token) throw new Error('GitHub token is required to push changes.');
   if (files.length === 0) throw new Error('No files selected to push.');
+  if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repo)) throw new Error('Invalid repository owner or name.');
+  if (!branch || /[\s~^:?*\[\\]/.test(branch) || branch.includes('..') || branch.endsWith('/') || branch.startsWith('/')) throw new Error('Invalid branch name.');
+  const paths = new Set<string>();
+  for (const file of files) {
+    if (!file.path || file.path.startsWith('/') || file.path.includes('\\') || file.path.split('/').some(p => !p || p === '..' || p === '.')) throw new Error(`Invalid file path: ${file.path}`);
+    if (paths.has(file.path)) throw new Error(`Duplicate file path: ${file.path}. Choose a narrower push scope.`);
+    paths.add(file.path);
+  }
 
   const authHeader = token.startsWith('Bearer ') || token.startsWith('token ') ? token : `token ${token}`;
   const ghHeaders: Record<string, string> = {
@@ -444,24 +450,37 @@ export async function pushFilesToGitHub(options: PushOptions): Promise<PushResul
     const res = await fetch(url, { ...init, headers: { ...ghHeaders, ...(init?.headers as Record<string, string> || {}) } });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error((err as any).message || `GitHub API error ${res.status}: ${url}`);
+      const failure = new Error((err as any).message || `GitHub API error ${res.status}: ${url}`) as Error & { status: number };
+      failure.status = res.status;
+      throw failure;
     }
     return res.json();
   };
 
   // ── 1. Resolve branch ref ──────────────────────────────────────────────
-  let targetBranch = branch;
+  const targetBranch = branch;
+  const encodedBranch = branch.split('/').map(encodeURIComponent).join('/');
+  let createBranch = false;
   let branchData: any;
   try {
-    branchData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${targetBranch}`);
+    branchData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${encodedBranch}`);
   } catch (e: any) {
-    // Branch not found — try default branch
-    const repoInfo = await ghFetch(`https://api.github.com/repos/${owner}/${repo}`).catch(() => null);
-    if (repoInfo?.default_branch && repoInfo.default_branch !== targetBranch) {
-      targetBranch = repoInfo.default_branch;
-      branchData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${targetBranch}`);
-    } else {
-      throw new Error(`Could not find branch '${targetBranch}' on ${owner}/${repo}`);
+    if (e.status !== 404 && e.status !== 409) throw e;
+    const repoInfo = await ghFetch(`https://api.github.com/repos/${owner}/${repo}`);
+    try {
+      branchData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(repoInfo.default_branch)}`);
+      createBranch = true;
+    } catch (baseError: any) {
+      if (baseError.status !== 409 && baseError.status !== 404) throw baseError;
+      const branches = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=1`);
+      if (branches.length) throw new Error('Could not resolve the base branch. Choose an existing branch.');
+      // GitHub requires a Contents API write to initialize an empty repository.
+      const first = files[0];
+      const initial = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/contents/${first.path.split('/').map(encodeURIComponent).join('/')}`, {
+        method: 'PUT', body: JSON.stringify({ message, branch, content: btoa(unescape(encodeURIComponent(first.content))) }),
+      });
+      if (files.length === 1) return { success: true, commitSha: initial.commit.sha, commitUrl: initial.commit.html_url, filesPushed: 1 };
+      branchData = { object: { sha: initial.commit.sha } };
     }
   }
   const latestCommitSha: string = branchData.object.sha;
@@ -509,9 +528,9 @@ export async function pushFilesToGitHub(options: PushOptions): Promise<PushResul
   const newCommitSha: string = newCommitData.sha;
 
   // ── 6. Update branch ref ──────────────────────────────────────────────
-  await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${targetBranch}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ sha: newCommitSha, force: false }),
+  await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/refs${createBranch ? '' : `/heads/${encodedBranch}`}`, {
+    method: createBranch ? 'POST' : 'PATCH',
+    body: JSON.stringify(createBranch ? { ref: `refs/heads/${targetBranch}`, sha: newCommitSha } : { sha: newCommitSha, force: false }),
   });
 
   return {

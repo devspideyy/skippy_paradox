@@ -312,17 +312,6 @@ export const CollabMonacoEditor: React.FC<Props> = ({
   }, [provider, provider?.status, file.id, bindToFile, cleanupBinding]);
 
   // ── Sync external/agent content updates to the shared Y.Text ───────────
-  useEffect(() => {
-    if (!docConnRef.current) return;
-    const ytext = docConnRef.current.doc.getText('monaco');
-    if (file.content !== undefined && file.content !== '' && file.content !== ytext.toString()) {
-      docConnRef.current.doc.transact(() => {
-        ytext.delete(0, ytext.length);
-        ytext.insert(0, file.content);
-      });
-    }
-  }, [file.content]);
-
   // ── Theme update ─────────────────────────────────────────────────────
 
   useEffect(() => {

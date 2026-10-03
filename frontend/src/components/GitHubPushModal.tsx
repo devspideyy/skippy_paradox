@@ -10,6 +10,8 @@ import {
 } from '../services/githubService';
 import { soundEffects } from '../utils/soundEffects';
 import BorderGlow from './BorderGlow';
+import { CollabProvider } from '../services/collabService';
+import { hydrateFiles } from '../services/harnessService';
 
 // Separate storage key for push PAT — never shares with OAuth read token
 const PUSH_PAT_KEY = 'skiffy-push-pat';
@@ -20,6 +22,7 @@ interface Props {
   files: StoredFile[];
   activeFile: StoredFile | null;
   isInRoom: boolean;
+  provider?: CollabProvider | null;
   sharedFiles?: Array<{ id: string; name: string; language: string }>;
 }
 
@@ -32,6 +35,7 @@ export const GitHubPushModal: React.FC<Props> = ({
   activeFile,
   isInRoom,
   sharedFiles = [],
+  provider,
 }) => {
   const { isDark } = useTheme();
 
@@ -42,7 +46,7 @@ export const GitHubPushModal: React.FC<Props> = ({
     if (repoFile?.repoOrigin) {
       return `${repoFile.repoOrigin.owner}/${repoFile.repoOrigin.repo}`;
     }
-    return 'devspideyy/skippy_paradox';
+    return '';
   }, [files]);
 
   const [repoString, setRepoString] = useState(defaultRepo);
@@ -52,7 +56,7 @@ export const GitHubPushModal: React.FC<Props> = ({
 
   // Auth state — uses a dedicated PAT key, never the OAuth read token
   const [token, setToken] = useState(() => localStorage.getItem(PUSH_PAT_KEY) || '');
-  const [saveTokenLocally, setSaveTokenLocally] = useState(true);
+  const [saveTokenLocally, setSaveTokenLocally] = useState(false);
   const [storedUser, setStoredUser] = useState<GitHubUser | null>(getStoredUser);
   const [tokenOk, setTokenOk] = useState<boolean | null>(null); // null = not validated
 
@@ -65,6 +69,8 @@ export const GitHubPushModal: React.FC<Props> = ({
   useEffect(() => {
     if (isOpen) {
       setRepoString(defaultRepo);
+      setScope(isInRoom && sharedFiles.length > 0 ? 'collab' : 'all');
+      setBranch(activeFile?.repoOrigin?.branch || files.find(f => f.repoOrigin)?.repoOrigin?.branch || 'main');
       setError(null);
       setPushResult(null);
       setPushStatus('');
@@ -78,13 +84,13 @@ export const GitHubPushModal: React.FC<Props> = ({
 
   // Determine files to push based on selected scope
   const filesToPush = useMemo(() => {
-    if (scope === 'active' && activeFile) {
-      return [{ path: activeFile.path || activeFile.name, content: activeFile.content }];
+    if (scope === 'active') {
+      return activeFile ? [{ path: activeFile.path || activeFile.name, content: activeFile.content }] : [];
     }
     if (scope === 'collab' && isInRoom) {
       const sharedIds = new Set(sharedFiles.map(s => s.id));
       const filtered = files.filter(f => sharedIds.has(f.id));
-      return (filtered.length > 0 ? filtered : files).map(f => ({
+      return filtered.map(f => ({
         path: f.path || f.name,
         content: f.content,
       }));
@@ -103,8 +109,8 @@ export const GitHubPushModal: React.FC<Props> = ({
     setPushResult(null);
 
     const trimmedRepo = repoString.trim();
-    if (!trimmedRepo.includes('/')) {
-      setError("Please specify the repository as 'owner/repo' (e.g. devspideyy/skippy_paradox)");
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(trimmedRepo)) {
+      setError("Please specify the repository as 'owner/repo'.");
       return;
     }
 
@@ -134,13 +140,19 @@ export const GitHubPushModal: React.FC<Props> = ({
     setPushStatus('Preparing Git tree and commit...');
 
     try {
+      if (provider?.agentOwner) throw new Error('Wait for the harness to finish before pushing.');
+      const sharedIds = new Set(sharedFiles.map(f => f.id));
+      const selected = scope === 'active' ? (activeFile ? [activeFile] : []) : scope === 'collab' ? files.filter(f => sharedIds.has(f.id)) : files;
+      if (provider && isInRoom) await Promise.all(selected.filter(f => sharedIds.has(f.id)).map(f => provider.openFileConnection(f.id).waitForSync()));
+      const snapshot = await hydrateFiles(selected.map(f => provider && isInRoom && sharedIds.has(f.id)
+        ? { ...f, content: provider.openFileConnection(f.id).doc.getText('monaco').toString(), contentLoaded: true } : f));
       setPushStatus(`Pushing ${filesToPush.length} file(s) to ${owner}/${repo} (${branch})...`);
       const res = await pushFilesToGitHub({
         owner,
         repo,
         branch: branch.trim() || 'main',
         message: commitMessage.trim() || 'feat: updates from Skiffy',
-        files: filesToPush,
+        files: snapshot.map(f => ({ path: f.path || f.name, content: f.content })),
         token: trimmedToken,
       });
 

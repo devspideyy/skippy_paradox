@@ -1,20 +1,22 @@
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(() => {
   return {
     server: {
-      port: 3000,
-      strictPort: false,
+      port: 3100,
+      strictPort: true,
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: 'http://localhost:8000',
+          target: 'http://127.0.0.1:8100',
           changeOrigin: true,
+          xfwd: true,
         },
         '/collab-ws': {
-          target: 'http://localhost:4000',
+          target: 'http://127.0.0.1:4100',
           changeOrigin: true,
           ws: true,
           rewrite: (path) => path.replace(/^\/collab-ws/, ''),
@@ -24,7 +26,7 @@ export default defineConfig(() => {
     plugins: [react()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        '@': path.resolve(path.dirname(fileURLToPath(import.meta.url)), './src'),
       },
     },
     optimizeDeps: {

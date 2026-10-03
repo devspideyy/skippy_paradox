@@ -101,11 +101,7 @@ export function getRandomColor(): string {
 
 function buildWsUrl(path: string): string {
   const rawUrl = (import.meta.env.VITE_COLLAB_URL || '').trim().replace(/\/+$/, '');
-  const collabUrl = rawUrl || (
-    typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-      ? 'https://skiffy-socket.onrender.com'
-      : ''
-  );
+  const collabUrl = rawUrl;
 
   if (collabUrl) {
     // Production: connect directly to the deployed socket server
@@ -129,6 +125,22 @@ export class DocConnection {
   readonly fileId: string;
   private ws: WebSocket | null = null;
   private _destroyed = false;
+  synced = false;
+  private syncListeners = new Set<() => void>();
+
+  onSync(callback: () => void) {
+    this.syncListeners.add(callback);
+    if (this.synced) callback();
+    return () => { this.syncListeners.delete(callback); };
+  }
+
+  waitForSync(): Promise<void> {
+    if (this.synced) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => { unsubscribe(); reject(new Error('Shared file did not sync. Rejoin the room.')); }, 12000);
+      const unsubscribe = this.onSync(() => { clearTimeout(timeout); unsubscribe(); resolve(); });
+    });
+  }
 
   constructor(fileId: string) {
     this.fileId = fileId;
@@ -136,7 +148,7 @@ export class DocConnection {
     this.awareness = new Awareness(this.doc);
   }
 
-  connect(roomId: string, displayName: string, color: string) {
+  connect(roomId: string, displayName: string, color: string, token: string) {
     if (this._destroyed) return;
 
     // Set user info for cursor rendering
@@ -145,7 +157,7 @@ export class DocConnection {
       color: color,
     });
 
-    const wsUrl = buildWsUrl(`/doc/${encodeURIComponent(roomId)}/${encodeURIComponent(this.fileId)}`);
+    const wsUrl = buildWsUrl(`/doc/${encodeURIComponent(roomId)}/${encodeURIComponent(this.fileId)}?token=${encodeURIComponent(token)}`);
     this.ws = new WebSocket(wsUrl);
     this.ws.binaryType = 'arraybuffer';
 
@@ -181,9 +193,13 @@ export class DocConnection {
       case MSG_SYNC: {
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, MSG_SYNC);
-        syncProtocol.readSyncMessage(
+        const syncType = syncProtocol.readSyncMessage(
           decoder, encoder, this.doc, this,
         );
+        if (syncType === syncProtocol.messageYjsSyncStep2) {
+          this.synced = true;
+          this.syncListeners.forEach(fn => fn());
+        }
         // If there's a response (syncStep2), send it back
         if (encoding.length(encoder) > 1) {
           this._sendBinary(encoding.toUint8Array(encoder));
@@ -254,6 +270,36 @@ export class CollabProvider {
   private _peerId = '';
   private _destroyed = false;
   private _pendingMessages: string[] = [];
+  private sessionToken = '';
+  agentOwner: string | null = null;
+  agentEvents: any[] = [];
+  private agentListeners = new Set<(message: any) => void>();
+  private requests = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void }>();
+
+  onAgentEvent(listener: (message: any) => void) {
+    this.agentListeners.add(listener);
+    return () => { this.agentListeners.delete(listener); };
+  }
+
+  private requestAgent(type: string, data: Record<string, any> = {}): Promise<any> {
+    if (this.status !== 'connected') return Promise.reject(new Error('Reconnect to the collaboration room first.'));
+    const requestId = (crypto.randomUUID?.() || `id-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { this.requests.delete(requestId); reject(new Error('Room request timed out. Rejoin the room.')); }, 12000);
+      this.requests.set(requestId, {
+        resolve: value => { clearTimeout(timer); resolve(value); },
+        reject: error => { clearTimeout(timer); reject(error); },
+      });
+      this._sendJson({ type, requestId, ...data });
+    });
+  }
+
+  claimAgent() { return this.requestAgent('agent-claim'); }
+  releaseAgent() { this._sendJson({ type: 'agent-release' }); }
+  publishAgentEvent(event: any) { this._sendJson({ type: 'agent-event', event }); }
+  applyAgentEdit(path: string, content: string, previous: string | null, language: string) {
+    return this.requestAgent('agent-edit', { path, content, previous, language });
+  }
 
   /** Active per-file doc connections */
   readonly docConnections: Map<string, DocConnection> = new Map();
@@ -300,6 +346,9 @@ export class CollabProvider {
     };
 
     this.ws.onclose = () => {
+      this.requests.forEach(r => r.reject(new Error('Collaboration disconnected.')));
+      this.requests.clear();
+      this.agentListeners.forEach(fn => fn({ type: 'agent-disconnected' }));
       if (this._status !== 'rejected' && this._status !== 'error') {
         this._setStatus('disconnected');
       }
@@ -412,7 +461,7 @@ export class CollabProvider {
     if (conn) return conn;
 
     conn = new DocConnection(fileId);
-    conn.connect(this.roomId, this.displayName, this.color);
+    conn.connect(this.roomId, this.displayName, this.color, this.sessionToken);
     this.docConnections.set(fileId, conn);
     return conn;
   }
@@ -452,7 +501,23 @@ export class CollabProvider {
 
   private _handleJsonMessage(msg: any) {
     switch (msg.type) {
+      case 'agent-reply': {
+        const request = this.requests.get(msg.requestId);
+        this.requests.delete(msg.requestId);
+        if (msg.error) request?.reject(new Error(msg.error));
+        else request?.resolve(msg);
+        break;
+      }
+      case 'agent-owner':
+        this.agentOwner = msg.peerId;
+        this.agentListeners.forEach(fn => fn(msg));
+        break;
+      case 'agent-event':
+        this.agentEvents = [...this.agentEvents, msg].slice(-150);
+        this.agentListeners.forEach(fn => fn(msg));
+        break;
       case 'room-created':
+        this.sessionToken = msg.sessionToken;
         this._peerId = msg.peerId;
         this._isHost = true;
         this._setStatus('connected');
@@ -464,6 +529,9 @@ export class CollabProvider {
         break;
 
       case 'approved':
+        this.sessionToken = msg.sessionToken;
+        this.agentOwner = msg.agentOwner || null;
+        this.agentEvents = msg.agentEvents || [];
         this._peerId = msg.peerId;
         this._setStatus('connected');
         this.events.onApproved(msg.sharedFiles || []);

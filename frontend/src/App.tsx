@@ -114,39 +114,45 @@ export const App: React.FC = () => {
   }, [files]);
 
   const handleAgentFileCreate = useCallback((name: string, content: string = '', language?: string) => {
-    const fileName = name.trim();
-    if (!fileName) return;
-    const detectedLang = language || detectLanguage(fileName, content) || '';
-
+    const path = name.trim();
+    if (!path) return;
+    const detected = language || detectLanguage(path, content) || 'plaintext';
+    const newId = (crypto.randomUUID?.() || `id-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     setFiles(prev => {
-      const existingIdx = prev.findIndex(f => f.name.toLowerCase() === fileName.toLowerCase());
-      if (existingIdx >= 0) {
-        const next = [...prev];
-        next[existingIdx] = {
-          ...next[existingIdx],
-          content,
-          language: detectedLang || next[existingIdx].language,
-          contentHash: computeContentHash(content),
-          lastModified: Date.now(),
-        };
-        setActiveFileId(next[existingIdx].id);
-        return next;
-      }
-      const newId = `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      const newFile: StoredFile = {
-        id: newId,
-        name: fileName,
-        content,
-        language: detectedLang,
-        contentHash: computeContentHash(content),
-        lastModified: Date.now(),
-        contentLoaded: true,
-      };
-      setActiveFileId(newId);
-      return [...prev, newFile];
+      const existing = prev.find(f => (f.path || f.name) === path);
+      if (existing) return prev.map(f => f.id === existing.id ? { ...f, content, language: detected,
+        contentLoaded: true, contentHash: computeContentHash(content), lastModified: Date.now() } : f);
+      return [...prev, { id: newId, name: path.split('/').pop() || path, path, content, language: detected,
+        contentLoaded: true, contentHash: computeContentHash(content), lastModified: Date.now() }];
     });
-    soundEffects.success();
   }, []);
+
+  // Observe every shared document, including unopened tabs. Yjs is the source of truth.
+  useEffect(() => {
+    const provider = collab.provider;
+    if (!provider || collab.status !== 'connected') return;
+    const cleanups = collab.sharedFiles.map(shared => {
+      const connection = provider.openFileConnection(shared.id);
+      const text = connection.doc.getText('monaco');
+      const sync = () => {
+        if (!connection.synced) return;
+        const content = text.toString();
+        setFiles(prev => {
+          const existing = prev.find(f => f.id === shared.id);
+          if (existing && existing.content === content && existing.contentLoaded !== false) return prev;
+          const updated: StoredFile = { ...existing, id: shared.id, name: shared.name.split('/').pop() || shared.name,
+            path: shared.name, language: shared.language, content, contentLoaded: true,
+            contentHash: computeContentHash(content), lastModified: Date.now() };
+          return existing ? prev.map(f => f.id === shared.id ? updated : f) : [...prev, updated];
+        });
+        setActiveFileId(prev => prev || shared.id);
+      };
+      text.observe(sync);
+      const off = connection.onSync(sync);
+      return () => { text.unobserve(sync); off(); };
+    });
+    return () => cleanups.forEach(cleanup => cleanup());
+  }, [collab.provider, collab.status, collab.sharedFiles]);
 
   // ─── Keyboard Shortcuts ──────────────────────────────────────────────
   useKeyboardShortcuts([
@@ -187,11 +193,11 @@ export const App: React.FC = () => {
       !autoSharedRef.current
     ) {
       const file = activeFileId ? files.find(f => f.id === activeFileId) : null;
-      if (file) {
+      if (file && file.contentLoaded !== false) {
         autoSharedRef.current = true;
         collab.shareFile({
           id: file.id,
-          name: file.name,
+          name: file.path || file.name,
           language: file.language,
           content: file.content,
         });
@@ -465,6 +471,7 @@ export const App: React.FC = () => {
           <GitHubPushModal
             isOpen={showGitHubPushModal}
             onClose={() => setShowGitHubPushModal(false)}
+            provider={collab.provider}
             files={files}
             activeFile={activeFileId ? files.find(f => f.id === activeFileId) || null : null}
             isInRoom={collab.status === 'connected'}

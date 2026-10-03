@@ -11,6 +11,7 @@
  */
 
 import http from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as Y from 'yjs';
 import * as syncProtocol from 'y-protocols/sync';
@@ -38,6 +39,8 @@ class Room {
   constructor(roomId) {
     this.roomId = roomId;
     this.hostId = null;
+    this.agentOwner = null;
+    this.agentEvents = [];
 
     /** @type {Map<string, { ws: WebSocket, displayName: string, color: string }>} */
     this.members = new Map();
@@ -152,7 +155,7 @@ function closeDocConn(docName, ws) {
   if (entry.conns.size === 0) {
     setTimeout(() => {
       const current = docs.get(docName);
-      if (current && current.conns.size === 0) {
+      if (current && current.conns.size === 0 && !rooms.has(docName.split('/')[0])) {
         current.awareness.destroy();
         current.doc.destroy();
         docs.delete(docName);
@@ -170,6 +173,7 @@ function generatePeerId() {
 
 function handleControlConnection(ws, roomId) {
   const peerId = generatePeerId();
+  ws.sessionToken = randomUUID();
   let room = rooms.get(roomId);
   let joined = false;
 
@@ -181,6 +185,8 @@ function handleControlConnection(ws, roomId) {
       return;
     }
 
+    if (!joined) room = rooms.get(roomId);
+    if (joined && (msg.type === 'create' || msg.type === 'join')) return;
     switch (msg.type) {
       // ── Create room (become host) ────────────────────────────
       case 'create': {
@@ -198,7 +204,7 @@ function handleControlConnection(ws, roomId) {
         rooms.set(roomId, room);
         joined = true;
 
-        sendJson(ws, { type: 'room-created', peerId, roomId });
+        sendJson(ws, { type: 'room-created', peerId, roomId, sessionToken: ws.sessionToken });
         room.broadcastMembersUpdate();
         break;
       }
@@ -247,6 +253,9 @@ function handleControlConnection(ws, roomId) {
           type: 'approved',
           peerId: msg.peerId,
           sharedFiles: room.getSharedFilesList(),
+          sessionToken: pendingMember.ws.sessionToken,
+          agentOwner: room.agentOwner,
+          agentEvents: room.agentEvents,
         });
         room.broadcastMembersUpdate();
         break;
@@ -265,10 +274,71 @@ function handleControlConnection(ws, roomId) {
       }
 
       // ── Share a file (host only) ────────────────────────────
+      case 'agent-claim': {
+        if (!room || !room.members.has(peerId)) return;
+        if (room.agentOwner) {
+          sendJson(ws, { type: 'agent-reply', requestId: msg.requestId, error: 'Another collaborator is using the harness. Wait for their run to finish.' });
+        } else {
+          room.agentOwner = peerId;
+          room.broadcastJson({ type: 'agent-owner', peerId, displayName: room.members.get(peerId).displayName });
+          sendJson(ws, { type: 'agent-reply', requestId: msg.requestId, ok: true });
+        }
+        break;
+      }
+      case 'agent-release': {
+        if (!room || room.agentOwner !== peerId) return;
+        room.agentOwner = null;
+        room.broadcastJson({ type: 'agent-owner', peerId: null });
+        break;
+      }
+      case 'agent-event': {
+        if (!room || room.agentOwner !== peerId || !msg.event || typeof msg.event !== 'object') return;
+        // Only user-visible activity crosses the room; never credentials or run tokens.
+        const { type, content, message, name, result, status, id } = msg.event;
+        if (!['user', 'message', 'status', 'tool', 'error', 'done'].includes(type)) return;
+        const event = { type, content, message, name, result, status, id, author: room.members.get(peerId).displayName };
+        if (JSON.stringify(event).length > 40000) return;
+        const payload = { type: 'agent-event', peerId, event };
+        room.agentEvents.push(payload);
+        room.agentEvents = room.agentEvents.slice(-150);
+        room.broadcastJson(payload, peerId);
+        break;
+      }
+      case 'agent-edit': {
+        if (!room || room.agentOwner !== peerId) return;
+        const { path, content, previous } = msg;
+        if (typeof path !== 'string' || typeof content !== 'string' || content.length > 1000000 || path.length > 500) return;
+        const existing = Array.from(room.sharedFiles.values()).find(f => f.name === path);
+        if (existing) {
+          const entry = getOrCreateDoc(`${roomId}/${existing.id}`);
+          const text = entry.doc.getText('monaco');
+          if (text.toString() !== previous && text.toString() !== content) {
+            sendJson(ws, { type: 'agent-reply', requestId: msg.requestId, error: `Conflict in ${path}: a collaborator edited it during the run. Your edit is preserved for review.` });
+            break;
+          }
+          if (text.toString() !== content) entry.doc.transact(() => { text.delete(0, text.length); text.insert(0, content); });
+          existing.content = content;
+          sendJson(ws, { type: 'agent-reply', requestId: msg.requestId, ok: true, fileId: existing.id });
+        } else if (previous !== null && previous !== undefined) {
+          sendJson(ws, { type: 'agent-reply', requestId: msg.requestId, error: `${path} was removed from this room. The agent edit was not applied.` });
+        } else {
+          const file = { id: randomUUID(), name: path, language: msg.language || 'plaintext', content };
+          room.sharedFiles.set(file.id, file);
+          seedDoc(`${roomId}/${file.id}`, content);
+          room.broadcastJson({ type: 'file-shared', file: { id: file.id, name: path, language: file.language } });
+          sendJson(ws, { type: 'agent-reply', requestId: msg.requestId, ok: true, fileId: file.id });
+        }
+        break;
+      }
       case 'share-file': {
         if (!room || peerId !== room.hostId) return;
         const file = msg.file;
         if (!file || !file.id) return;
+        if (room.sharedFiles.has(file.id)) return;
+        if (Array.from(room.sharedFiles.values()).some(f => f.name === file.name)) {
+          sendJson(ws, { type: 'error', message: 'A file with this path is already shared.' });
+          return;
+        }
 
         room.sharedFiles.set(file.id, {
           id: file.id,
@@ -481,6 +551,16 @@ function handleControlConnection(ws, roomId) {
 
 function handleDisconnect(ws, peerId, room) {
   if (!room) return;
+  if (room.agentOwner === peerId) {
+    room.agentOwner = null;
+    room.broadcastJson({ type: 'agent-owner', peerId: null });
+  }
+  for (const file of room.sharedFiles.values()) {
+    const entry = docs.get(`${room.roomId}/${file.id}`);
+    if (entry) for (const [conn] of entry.conns) {
+      if (conn.sessionToken === ws.sessionToken) conn.close(4003, 'Room membership ended');
+    }
+  }
 
   const wasMember = room.members.has(peerId);
   const member = room.members.get(peerId);
@@ -541,15 +621,16 @@ function sendJson(ws, msg) {
 
 // ─── Yjs Document Channel Handler ──────────────────────────────────────
 
-function handleDocConnection(ws, roomId, fileId) {
+function handleDocConnection(ws, roomId, fileId, sessionToken) {
   const docName = `${roomId}/${fileId}`;
   const room = rooms.get(roomId);
 
   // Verify room exists and file is shared
-  if (!room || !room.sharedFiles.has(fileId)) {
+  if (!room || !room.sharedFiles.has(fileId) || !Array.from(room.members.values()).some(m => m.ws.sessionToken === sessionToken)) {
     ws.close(4001, 'File not shared');
     return;
   }
+  ws.sessionToken = sessionToken;
 
   const entry = getOrCreateDoc(docName);
   const { doc, awareness, conns } = entry;
@@ -633,11 +714,7 @@ function handleDocConnection(ws, roomId, fileId) {
     syncProtocol.writeUpdate(encoder, update);
     const msg = encoding.toUint8Array(encoder);
 
-    for (const [conn] of conns) {
-      if (conn !== origin && conn.readyState === WebSocket.OPEN) {
-        conn.send(msg, { binary: true });
-      }
-    }
+    if (ws !== origin && ws.readyState === WebSocket.OPEN) ws.send(msg, { binary: true });
   };
   doc.on('update', updateHandler);
 
@@ -652,11 +729,7 @@ function handleDocConnection(ws, roomId, fileId) {
     );
     const msg = encoding.toUint8Array(encoder);
 
-    for (const [conn] of conns) {
-      if (conn !== origin && conn.readyState === WebSocket.OPEN) {
-        conn.send(msg, { binary: true });
-      }
-    }
+    if (ws !== origin && ws.readyState === WebSocket.OPEN) ws.send(msg, { binary: true });
   };
   awareness.on('update', awarenessHandler);
 
@@ -703,6 +776,9 @@ const server = http.createServer((req, res) => {
 
   // Direct Code Execution Endpoint
   if (req.url === '/execute' && req.method === 'POST') {
+    res.writeHead(410, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Use /api/judge0/execute on the IDE server.' }));
+    return;
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
@@ -823,7 +899,7 @@ server.on('upgrade', (req, socket, head) => {
     wss.handleUpgrade(req, socket, head, (ws) => {
       const roomId = decodeURIComponent(docMatch[1]);
       const fileId = decodeURIComponent(docMatch[2]);
-      handleDocConnection(ws, roomId, fileId);
+      handleDocConnection(ws, roomId, fileId, url.searchParams.get('token'));
     });
     return;
   }

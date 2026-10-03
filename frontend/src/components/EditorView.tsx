@@ -5,11 +5,12 @@ import { CollabMonacoEditor } from './CollabMonacoEditor';
 import { FileExplorer } from './FileExplorer';
 import { CollabBar } from './CollabBar';
 import { ChatPanel } from './ChatPanel';
-import { GeminiPanel } from './GeminiPanel';
+import { HarnessPanel } from './HarnessPanel';
 import VoiceLobbyPanel from './VoiceLobbyPanel';
 import { CodeRunner } from './CodeRunner';
 import DotField from './DotField';
 import { StoredFile } from '../services/storageService';
+import { hydrateFiles } from '../services/harnessService';
 import { SharedFileInfo } from '../services/collabService';
 import { VoiceManager } from '../services/voiceManager';
 import { useTheme } from '../hooks/useTheme';
@@ -115,7 +116,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   }, [activeFileId, files, collab.sharedFiles]);
 
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isGeminiOpen, setIsGeminiOpen] = useState(false);
+  const [isGeminiOpen, setIsGeminiOpen] = useState(true);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -194,10 +195,13 @@ export const EditorView: React.FC<EditorViewProps> = ({
     return m;
   }, [collab.sharedFiles, files]);
 
-  const handleAddToCollab = useCallback((fileId: string) => {
+  const handleAddToCollab = useCallback(async (fileId: string) => {
     const file = files.find(f => f.id === fileId);
     if (!file) return;
-    collab.shareFile({ id: file.id, name: file.name, language: file.language, content: file.content });
+    try {
+      const [loaded] = await hydrateFiles([file]);
+      collab.shareFile({ id: loaded.id, name: loaded.path || loaded.name, language: loaded.language, content: loaded.content });
+    } catch (error: any) { window.alert(error.message || 'Could not load the file for sharing.'); }
   }, [files, collab]);
 
   const handleRemoveFromCollab = useCallback((fileId: string) => { collab.unshareFile(fileId); }, [collab]);
@@ -564,7 +568,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
             <>
               <ResizeHandle isDark={isDark} />
               <Panel defaultSize="26%" minSize="18%" maxSize="45%" className="flex flex-col min-w-0">
-                <GeminiPanel
+                <HarnessPanel provider={collab.provider} sharedFiles={collab.sharedFiles}
                   activeFile={activeFile}
                   allFiles={files}
                   onCodeChange={(fileId, content) => onCodeChange(fileId, content)}
@@ -734,7 +738,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
             </div>
           ) : mobilePane === 'gemini' ? (
             <div className="flex-1 min-h-0 overflow-hidden">
-              <GeminiPanel
+              <HarnessPanel provider={collab.provider} sharedFiles={collab.sharedFiles}
                 activeFile={activeFile}
                 allFiles={files}
                 onCodeChange={(fileId, content) => onCodeChange(fileId, content)}

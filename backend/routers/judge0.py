@@ -12,13 +12,15 @@ import time
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Header
+from .harness import check_access
+import asyncio
 from pydantic import BaseModel
 
 router = APIRouter()
 
 # OnlineCompiler.io API configuration
-ONLINECOMPILER_API_KEY = os.getenv("ONLINECOMPILER_API_KEY", "5962da0b575cfebc23f778259024c99c").strip()
+ONLINECOMPILER_API_KEY = os.getenv("ONLINECOMPILER_API_KEY", "").strip()
 ONLINECOMPILER_API_URL = "https://api.onlinecompiler.io/api/run-code-sync/"
 
 ONLINECOMPILER_MAP = {
@@ -357,7 +359,8 @@ def infer_language_from_code(code: str) -> str:
 
 
 @router.post("/execute", response_model=CodeExecutionResponse)
-async def execute_code(request: CodeExecutionRequest):
+async def execute_code(request: CodeExecutionRequest, http_request: Request, authorization: str | None = Header(None)):
+    check_access(http_request, authorization)
     """
     Execute code using OnlineCompiler.io, local sandbox execution, or Judge0 API.
     """
@@ -388,14 +391,14 @@ async def execute_code(request: CodeExecutionRequest):
         return oc_res
 
     # 2. Try local sandbox execution (Python, Node, C, C++, Java)
-    local_res = _run_local_process(request.source_code, lang, request.stdin or "")
+    local_res = await asyncio.to_thread(_run_local_process, request.source_code, lang, request.stdin or "")
     if local_res is not None:
         return local_res
 
     # Language ID for Judge0
     language_id = LANGUAGE_IDS.get(lang)
     if not language_id:
-        local_res = _run_local_process(request.source_code, lang, request.stdin or "")
+        local_res = await asyncio.to_thread(_run_local_process, request.source_code, lang, request.stdin or "")
         if local_res is not None:
             return local_res
         raise HTTPException(

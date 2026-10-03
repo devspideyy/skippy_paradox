@@ -100,7 +100,12 @@ export function getRandomColor(): string {
 // ─── WebSocket URL builder ─────────────────────────────────────────────
 
 function buildWsUrl(path: string): string {
-  const collabUrl = (import.meta.env.VITE_COLLAB_URL || '').trim().replace(/\/+$/, '');
+  const rawUrl = (import.meta.env.VITE_COLLAB_URL || '').trim().replace(/\/+$/, '');
+  const collabUrl = rawUrl || (
+    typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+      ? 'https://skiffy-socket.onrender.com'
+      : ''
+  );
 
   if (collabUrl) {
     // Production: connect directly to the deployed socket server

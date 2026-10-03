@@ -6,7 +6,9 @@ const RAW_API_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BA
 const NORMALIZED_API_URL = RAW_API_URL.replace(/\/+$/, '');
 const API_BASE = NORMALIZED_API_URL
   ? (NORMALIZED_API_URL.endsWith('/api') ? NORMALIZED_API_URL : `${NORMALIZED_API_URL}/api`)
-  : '/api';
+  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+      ? 'https://skiffy.onrender.com/api'
+      : '/api');
 
 export interface ExecutionRequest {
   source_code: string;

@@ -97,14 +97,34 @@ const MAGIKA_LABEL_MAP: Record<string, string> = {
   txt: 'Text', txtascii: 'Text', txtutf8: 'Text', txtutf16: 'Text',
 };
 
-// ─── Synchronous Detection (Extension Only) ─────────────────────────────
+export function inferLanguageFromSnippet(content: string): string {
+  if (!content) return '';
+  const c = content.trim();
+  if (!c) return '';
+  if (/\b(def\s+\w+|import\s+\w+|from\s+\w+\s+import|print\s*\(|elif\s+|if\s+__name__\s*==|class\s+\w+:)/.test(c)) return 'Python';
+  if (/\b(console\.log|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|function\s*\(|=>)/.test(c)) return 'JavaScript';
+  if (/#include\s*<iostream>|std::|cout\s*<</.test(c)) return 'C++';
+  if (/#include\s*<stdio\.h>|printf\s*\(/.test(c)) return 'C';
+  if (/\b(public\s+class|System\.out\.print|public\s+static\s+void\s+main)/.test(c)) return 'Java';
+  if (/\b(package\s+main|func\s+main\(\)|fmt\.Print)/.test(c)) return 'Go';
+  if (/\b(fn\s+main\(\)|println!\s*\(|let\s+mut\s+)/.test(c)) return 'Rust';
+  if (/\b(using\s+System|Console\.WriteLine)/.test(c)) return 'C#';
+  if (/<\?php|\b(\$_POST|\$_GET|\$this->)/.test(c)) return 'PHP';
+  if (/\b(puts\s+|def\s+\w+.*end|require\s+['"])/.test(c)) return 'Ruby';
+  if (/^#!\/bin\/(bash|sh)|\becho\s+/.test(c)) return 'Shell';
+  if (/\b(SELECT\s+.*FROM|INSERT\s+INTO|CREATE\s+TABLE)/i.test(c)) return 'SQL';
+  if (/<!DOCTYPE\s+html|<html|<div|<body/i.test(c)) return 'HTML';
+  return '';
+}
+
+// ─── Synchronous Detection (Extension + Heuristics) ─────────────────────
 
 /**
- * **Synchronous** language detection using file extension only.
- * Use this for immediate UI feedback (status bar, language icon, etc.)
- * when you can't await the AI model.
+ * **Synchronous** language detection using file extension and content heuristics.
+ * Use this for immediate UI feedback (status bar, language icon, editor syntax)
+ * without waiting for the async AI model.
  */
-export function detectLanguage(fileName: string, _content: string): string {
+export function detectLanguage(fileName: string, content: string = ''): string {
   if (fileName) {
     // Handle special filenames like "Dockerfile", "Makefile"
     const baseName = fileName.split('/').pop()?.toLowerCase() || '';
@@ -112,8 +132,14 @@ export function detectLanguage(fileName: string, _content: string): string {
     if (baseName === 'makefile' || baseName === 'gnumakefile') return 'Makefile';
 
     const ext = fileName.split('.').pop()?.toLowerCase();
-    if (ext && EXT_TO_LANGUAGE[ext]) return EXT_TO_LANGUAGE[ext];
+    if (ext && ext !== baseName && EXT_TO_LANGUAGE[ext]) return EXT_TO_LANGUAGE[ext];
   }
+
+  if (content) {
+    const inferred = inferLanguageFromSnippet(content);
+    if (inferred) return inferred;
+  }
+
   return '';
 }
 

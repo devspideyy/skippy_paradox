@@ -474,6 +474,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
                         language={activeFile.language}
                         fileName={activeFile.name}
                         onClose={() => setIsTerminalOpen(false)}
+                        onLanguageChange={(newLang) => onLanguageChange(activeFile.id, newLang)}
                       />
                     </Panel>
                   </>
@@ -632,7 +633,12 @@ export const EditorView: React.FC<EditorViewProps> = ({
           ) : mobilePane === 'runner' ? (
             <div className="flex-1 min-h-0 overflow-hidden">
               {activeFile ? (
-                <CodeRunner code={activeFile.content} language={activeFile.language} fileName={activeFile.name} />
+                <CodeRunner
+                  code={activeFile.content}
+                  language={activeFile.language}
+                  fileName={activeFile.name}
+                  onLanguageChange={(newLang) => onLanguageChange(activeFile.id, newLang)}
+                />
               ) : (
                 <div className={`h-full flex flex-col items-center justify-center ${bgEditor} ${textMuted}`}>
                   <Play size={24} className="mb-2 opacity-50" />

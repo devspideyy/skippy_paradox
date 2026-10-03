@@ -3,6 +3,7 @@ Judge0 Router — Code execution via Judge0 API with automatic local sandbox fal
 """
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -324,12 +325,62 @@ async def _run_onlinecompiler(code: str, language: str, stdin: str = "") -> Code
     return None
 
 
+def infer_language_from_code(code: str) -> str:
+    c = code.strip()
+    if not c:
+        return "python"
+    if re.search(r"\b(def\s+\w+|import\s+\w+|from\s+\w+\s+import|print\s*\(|elif\s+|if\s+__name__\s*==|class\s+\w+:)", c):
+        return "python"
+    if re.search(r"\b(console\.log|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|function\s*\(|=>)", c):
+        return "javascript"
+    if re.search(r"#include\s*<iostream>|std::|cout\s*<<", c):
+        return "cpp"
+    if re.search(r"#include\s*<stdio\.h>|printf\s*\(", c):
+        return "c"
+    if re.search(r"\b(public\s+class|System\.out\.print|public\s+static\s+void\s+main)", c):
+        return "java"
+    if re.search(r"\b(package\s+main|func\s+main\(\)|fmt\.Print)", c):
+        return "go"
+    if re.search(r"\b(fn\s+main\(\)|println!\s*\(|let\s+mut\s+)", c):
+        return "rust"
+    if re.search(r"\b(using\s+System|Console\.WriteLine)", c):
+        return "csharp"
+    if re.search(r"<\?php|\b(\$_POST|\$_GET|\$this->)", c):
+        return "php"
+    if re.search(r"\b(puts\s+|def\s+\w+.*end|require\s+['\"])", c):
+        return "ruby"
+    if re.search(r"^#!/bin/(bash|sh)|\becho\s+", c, re.M):
+        return "bash"
+    if re.search(r"\b(SELECT\s+.*FROM|INSERT\s+INTO|CREATE\s+TABLE)", c, re.I):
+        return "sql"
+    return "python"
+
+
 @router.post("/execute", response_model=CodeExecutionResponse)
 async def execute_code(request: CodeExecutionRequest):
     """
     Execute code using OnlineCompiler.io, local sandbox execution, or Judge0 API.
     """
-    lang = request.language.lower()
+    raw_lang = (request.language or "").strip().lower()
+    alias_map = {
+        "py": "python",
+        "python3": "python",
+        "js": "javascript",
+        "node": "javascript",
+        "ts": "typescript",
+        "c++": "cpp",
+        "c#": "csharp",
+        "rb": "ruby",
+        "rs": "rust",
+        "sh": "bash",
+        "shell": "bash",
+    }
+    lang = alias_map.get(raw_lang, raw_lang)
+
+    # If language is unknown or empty, infer from code
+    if not lang or (lang not in LANGUAGE_IDS and lang not in ONLINECOMPILER_MAP):
+        lang = infer_language_from_code(request.source_code)
+
 
     # 1. Try OnlineCompiler.io
     oc_res = await _run_onlinecompiler(request.source_code, lang, request.stdin or "")

@@ -18,12 +18,30 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { executeCode, mapMonacoLanguageToJudge0, ExecutionResult } from '../services/judge0Service';
+import { inferLanguageFromSnippet } from '../utils/detectLanguage';
+
+export const SUPPORTED_RUNNER_LANGS = [
+  'Python',
+  'JavaScript',
+  'TypeScript',
+  'C++',
+  'C',
+  'Java',
+  'Go',
+  'Rust',
+  'Ruby',
+  'PHP',
+  'C#',
+  'Bash',
+  'SQL',
+];
 
 interface CodeRunnerProps {
   code: string;
   language: string;
   fileName: string;
   onClose?: () => void;
+  onLanguageChange?: (language: string) => void;
 }
 
 interface TerminalSession {
@@ -56,6 +74,7 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({
   language,
   fileName,
   onClose,
+  onLanguageChange,
 }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [history, setHistory] = useState<TerminalSession[]>([]);
@@ -65,6 +84,19 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({
   const [copied, setCopied] = useState(false);
   const terminalBottomRef = useRef<HTMLDivElement>(null);
   const terminalContainerRef = useRef<HTMLDivElement>(null);
+
+  const detected = inferLanguageFromSnippet(code);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(
+    language || detected || 'Python'
+  );
+
+  useEffect(() => {
+    if (language) {
+      setSelectedLanguage(language);
+    } else if (detected) {
+      setSelectedLanguage(detected);
+    }
+  }, [language, detected]);
 
   // Auto-scroll to bottom when new terminal output arrives
   useEffect(() => {
@@ -76,8 +108,9 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({
   const handleRun = useCallback(async () => {
     if (isRunning) return;
 
+    const activeLang = selectedLanguage || language || detected || 'Python';
     const trimmedCode = code.trim();
-    const command = getCommandForLanguage(language, fileName);
+    const command = getCommandForLanguage(activeLang, fileName);
     const timeStr = new Date().toLocaleTimeString([], { hour12: false });
     const sessionId = Date.now().toString();
 
@@ -98,7 +131,7 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({
     setCurrentRunningCmd(command);
 
     try {
-      const judge0Lang = mapMonacoLanguageToJudge0(language);
+      const judge0Lang = mapMonacoLanguageToJudge0(activeLang);
       const executionResult = await executeCode({
         source_code: code,
         language: judge0Lang,
@@ -135,7 +168,7 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({
       setIsRunning(false);
       setCurrentRunningCmd(null);
     }
-  }, [code, language, fileName, stdin, isRunning]);
+  }, [code, language, fileName, stdin, isRunning, selectedLanguage, detected]);
 
   // Global shortcut: Ctrl+Enter or Cmd+Enter to run code
   useEffect(() => {
@@ -216,6 +249,28 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800/40 text-slate-400 hidden sm:inline-block truncate max-w-[130px]">
             {fileName || 'script'}
           </span>
+
+          {/* Language Selector Dropdown */}
+          <div className="relative flex items-center">
+            <select
+              value={selectedLanguage}
+              onChange={(e) => {
+                const nextLang = e.target.value;
+                setSelectedLanguage(nextLang);
+                onLanguageChange?.(nextLang);
+              }}
+              aria-label="Execution Language"
+              className="bg-slate-800/90 hover:bg-slate-700/80 text-emerald-400 font-mono text-[10px] pl-2 pr-4 py-0.5 rounded border border-slate-700/60 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer appearance-none transition-colors"
+              title="Execution language"
+            >
+              {SUPPORTED_RUNNER_LANGS.map((lang) => (
+                <option key={lang} value={lang} className="bg-[#0e131f] text-slate-200">
+                  {lang}
+                </option>
+              ))}
+            </select>
+            <span className="absolute right-1 pointer-events-none text-slate-400 text-[8px]">▾</span>
+          </div>
         </div>
 
         {/* Right: Actions */}

@@ -13,10 +13,11 @@ import {
 import { detectLanguage, detectLanguageAI } from './utils/detectLanguage';
 import { fetchRawContent, getStoredToken, GitHubRepo, RepoTreeItem } from './services/githubService';
 import { GitHubImportModal } from './components/GitHubImportModal';
+import { GitHubPushModal } from './components/GitHubPushModal';
 import { CollabRoomModal } from './components/CollabRoomModal';
 import { useCollabRoom } from './hooks/useCollabRoom';
 import { 
-  Plus, Github, Users, Sun, Moon, Search 
+  Plus, Github, Users, Sun, Moon, Search, Upload 
 } from 'lucide-react';
 
 // Configure Monaco CDN path — @monaco-editor/react handles init internally
@@ -69,6 +70,7 @@ export const App: React.FC = () => {
   const [loadingFileId, setLoadingFileId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [showGitHubModal, setShowGitHubModal] = useState(false);
+  const [showGitHubPushModal, setShowGitHubPushModal] = useState(false);
   const [showCollabModal, setShowCollabModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
 
@@ -401,6 +403,14 @@ export const App: React.FC = () => {
       shortcut: 'Ctrl+Shift+G'
     },
     {
+      id: 'github-push',
+      label: 'Push to GitHub',
+      icon: <Upload size={16} />,
+      action: () => setShowGitHubPushModal(true),
+      keywords: ['github', 'push', 'commit', 'repo', 'export'],
+      shortcut: 'Ctrl+Shift+U'
+    },
+    {
       id: 'collab',
       label: 'Start Collaboration',
       icon: <Users size={16} />,
@@ -441,6 +451,7 @@ export const App: React.FC = () => {
             onCodeChange={handleCodeChange}
             onLanguageChange={handleLanguageChange}
             onOpenGitHub={() => setShowGitHubModal(true)}
+            onOpenGitHubPush={() => setShowGitHubPushModal(true)}
             onOpenCollab={() => setShowCollabModal(true)}
             onRepoDelete={handleRepoDelete}
             collab={collab}
@@ -450,6 +461,14 @@ export const App: React.FC = () => {
             onClose={() => setShowGitHubModal(false)}
             onImport={handleGitHubImport}
             onImportRepo={handleRepoImport}
+          />
+          <GitHubPushModal
+            isOpen={showGitHubPushModal}
+            onClose={() => setShowGitHubPushModal(false)}
+            files={files}
+            activeFile={activeFileId ? files.find(f => f.id === activeFileId) || null : null}
+            isInRoom={collab.status === 'connected'}
+            sharedFiles={collab.sharedFiles}
           />
           <CollabRoomModal
             isOpen={showCollabModal}

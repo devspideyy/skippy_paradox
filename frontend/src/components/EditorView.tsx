@@ -88,6 +88,7 @@ interface EditorViewProps {
   onCodeChange: (id: string, newCode: string) => void;
   onLanguageChange: (id: string, language: string) => void;
   onOpenGitHub: () => void;
+  onOpenGitHubPush: () => void;
   onOpenCollab: () => void;
   onRepoDelete?: (repoKey: string) => void;
   collab: CollabHook;
@@ -98,7 +99,7 @@ type MobilePane = 'editor' | 'runner' | 'gemini' | 'chat' | 'voice';
 /* ── Component ─────────────────────────────────────────────────────── */
 export const EditorView: React.FC<EditorViewProps> = ({
   files, activeFileId, loadingFileId, onFileSelect, onFileCreate, onAgentFileCreate, onFileDelete, onFileUpload,
-  onCodeChange, onLanguageChange, onOpenGitHub, onOpenCollab, onRepoDelete, collab,
+  onCodeChange, onLanguageChange, onOpenGitHub, onOpenGitHubPush, onOpenCollab, onRepoDelete, collab,
 }) => {
   const { isDark, toggleTheme } = useTheme();
 
@@ -310,6 +311,21 @@ export const EditorView: React.FC<EditorViewProps> = ({
             )}
           </div>
 
+          {/* Push to GitHub */}
+          <button
+            onClick={onOpenGitHubPush}
+            aria-label="Push code to GitHub"
+            title="Push to GitHub"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 border ${
+              isDark
+                ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700 hover:border-purple-500/50'
+                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 hover:border-purple-400'
+            } shadow-sm`}
+          >
+            <Github size={14} className="text-purple-400" />
+            <span className="hidden sm:inline">Push</span>
+          </button>
+
           {!isInRoom && (
             <button onClick={onOpenCollab}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#CAA4F7]/15 hover:bg-[#CAA4F7]/25 text-[#CAA4F7] text-xs font-bold transition-all active:scale-95 border border-[#CAA4F7]/20">
@@ -367,12 +383,24 @@ export const EditorView: React.FC<EditorViewProps> = ({
               </button>
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
             </div>
-            <button 
-              onClick={onOpenGitHub}
-              aria-label="Import repository from GitHub"
-              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all border focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${isDark ? 'bg-[#232340] hover:bg-[#2a2a50] text-slate-300 border-slate-700/50 hover:border-purple-500/50' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-300 hover:border-purple-400'} active:scale-[0.98] shadow-sm`}>
-              <Github size={14} /> Import from GitHub
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={onOpenGitHub}
+                aria-label="Import repository from GitHub"
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all border focus:outline-none focus:ring-2 focus:ring-purple-500/50 ${isDark ? 'bg-[#232340] hover:bg-[#2a2a50] text-slate-300 border-slate-700/50 hover:border-purple-500/50' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-300 hover:border-purple-400'} active:scale-[0.98] shadow-sm`}
+                title="Import repository from GitHub"
+              >
+                <Github size={13} /> Import
+              </button>
+              <button 
+                onClick={onOpenGitHubPush}
+                aria-label="Push changes to GitHub"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-sm transition-all active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                title="Push code to GitHub"
+              >
+                <Upload size={13} /> Push
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
             <FileExplorer files={files} activeFileId={activeFileId} loadingFileId={loadingFileId}
@@ -411,10 +439,20 @@ export const EditorView: React.FC<EditorViewProps> = ({
                 </button>
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
               </div>
-              <button onClick={onOpenGitHub}
-                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all border ${isDark ? 'bg-[#232340] hover:bg-[#2a2a50] text-slate-300 border-slate-700/50 hover:border-purple-500/50' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-300 hover:border-purple-400'} active:scale-[0.98] shadow-sm`}>
-                <Github size={14} /> Import from GitHub
-              </button>
+              <div className="flex gap-2">
+                <button onClick={onOpenGitHub}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all border ${isDark ? 'bg-[#232340] hover:bg-[#2a2a50] text-slate-300 border-slate-700/50 hover:border-purple-500/50' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-300 hover:border-purple-400'} active:scale-[0.98] shadow-sm`}
+                  title="Import from GitHub"
+                >
+                  <Github size={13} /> Import
+                </button>
+                <button onClick={onOpenGitHubPush}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-sm transition-all active:scale-[0.98]"
+                  title="Commit & Push to GitHub"
+                >
+                  <Upload size={13} /> Push
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
               {files.length === 0 && !(isInRoom && collab.sharedFiles.length > 0) ? (

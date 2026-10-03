@@ -409,3 +409,116 @@ export async function fetchFromPublicUrl(url: string): Promise<{ fileName: strin
 
   return { fileName: parsed.fileName, content: await res.text() };
 }
+
+// ─── Push to GitHub (Git Data API) ─────────────────────────────────────
+
+export interface PushOptions {
+  owner: string;
+  repo: string;
+  branch?: string;
+  message: string;
+  files: Array<{ path: string; content: string }>;
+  token: string;
+}
+
+export interface PushResult {
+  success: boolean;
+  commitSha: string;
+  commitUrl: string;
+  filesPushed: number;
+}
+
+export async function pushFilesToGitHub(options: PushOptions): Promise<PushResult> {
+  const { owner, repo, branch = 'main', message, files, token } = options;
+  if (!token) throw new Error('GitHub token is required to push changes.');
+  if (files.length === 0) throw new Error('No files selected to push.');
+
+  const authHeader = token.startsWith('Bearer ') || token.startsWith('token ') ? token : `token ${token}`;
+  const ghHeaders: Record<string, string> = {
+    'Accept': 'application/vnd.github.v3+json',
+    'Authorization': authHeader,
+    'Content-Type': 'application/json',
+  };
+
+  const ghFetch = async (url: string, init?: RequestInit) => {
+    const res = await fetch(url, { ...init, headers: { ...ghHeaders, ...(init?.headers as Record<string, string> || {}) } });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any).message || `GitHub API error ${res.status}: ${url}`);
+    }
+    return res.json();
+  };
+
+  // ── 1. Resolve branch ref ──────────────────────────────────────────────
+  let targetBranch = branch;
+  let branchData: any;
+  try {
+    branchData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${targetBranch}`);
+  } catch (e: any) {
+    // Branch not found — try default branch
+    const repoInfo = await ghFetch(`https://api.github.com/repos/${owner}/${repo}`).catch(() => null);
+    if (repoInfo?.default_branch && repoInfo.default_branch !== targetBranch) {
+      targetBranch = repoInfo.default_branch;
+      branchData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${targetBranch}`);
+    } else {
+      throw new Error(`Could not find branch '${targetBranch}' on ${owner}/${repo}`);
+    }
+  }
+  const latestCommitSha: string = branchData.object.sha;
+
+  // ── 2. Get base tree SHA from HEAD commit ──────────────────────────────
+  const commitData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/commits/${latestCommitSha}`);
+  const baseTreeSha: string = commitData.tree.sha;
+
+  // ── 3. Create blobs individually (base64 encoded) ─────────────────────
+  //    Using blobs API avoids GitRPC::BadObjectState that occurs when
+  //    embedding raw content strings directly in the tree payload.
+  const treeEntries: Array<{ path: string; mode: string; type: string; sha: string }> = [];
+
+  for (const file of files) {
+    const cleanPath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
+
+    // Encode content to base64 (works for any UTF-8 text)
+    const encoded = btoa(unescape(encodeURIComponent(file.content)));
+
+    const blobData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/blobs`, {
+      method: 'POST',
+      body: JSON.stringify({ content: encoded, encoding: 'base64' }),
+    });
+
+    treeEntries.push({
+      path: cleanPath,
+      mode: '100644',
+      type: 'blob',
+      sha: blobData.sha,
+    });
+  }
+
+  // ── 4. Create tree referencing blob SHAs ──────────────────────────────
+  const newTreeData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/trees`, {
+    method: 'POST',
+    body: JSON.stringify({ base_tree: baseTreeSha, tree: treeEntries }),
+  });
+  const newTreeSha: string = newTreeData.sha;
+
+  // ── 5. Create commit ──────────────────────────────────────────────────
+  const newCommitData = await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/commits`, {
+    method: 'POST',
+    body: JSON.stringify({ message, tree: newTreeSha, parents: [latestCommitSha] }),
+  });
+  const newCommitSha: string = newCommitData.sha;
+
+  // ── 6. Update branch ref ──────────────────────────────────────────────
+  await ghFetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${targetBranch}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ sha: newCommitSha, force: false }),
+  });
+
+  return {
+    success: true,
+    commitSha: newCommitSha,
+    commitUrl: `https://github.com/${owner}/${repo}/commit/${newCommitSha}`,
+    filesPushed: files.length,
+  };
+}
+
